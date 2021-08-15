@@ -181,18 +181,23 @@ func (b *bot) Update(update *echotron.Update) {
 	switch command {
 	case "/start":
 		b.handleStart()
+		return
 
 	case "/help":
 		b.SendMessage("😈 No one is gonna help ya", b.chatID, nil)
+		return
 
 	case "/invite":
 		b.TEMP_handleInvite(payload)
+		return
 
 	case "/accept":
 		b.handleAccept(payload)
+		return
 
 	case "/id":
 		b.SendMessage(fmt.Sprint(b.chatID), b.chatID, nil)
+		return
 	}
 
 	// Inside a duel
