@@ -21,65 +21,107 @@ func newBot(chatID int64) echotron.Bot {
 
 	if res, err := api.GetChat(chatID); err == nil {
 		if res.Result != nil && res.Result.Type == "private" {
-			AddNewPlayer(chatID, res.Result.FirstName)
+			AddNewPlayer(chatID, ParseName(res.Result.FirstName))
 		}
 	}
 
 	return &bot{chatID, api}
 }
 
-func (b *bot) handleStart() {
-	var botUsername string
-
-	if res, err := b.GetMe(); err == nil && res.Result != nil {
-		botUsername = res.Result.Username
-	}
-	text := fmt.Sprint(
-		"👋 <b>Welcome adventurer to @", botUsername, "</b> <code>[BETA]</code>\n",
-		"If you are new I suggest you to see how to play using /help\n",
-		"Use me inline in to engage a fight against another user\n",
-		"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>",
+func (b *bot) handleStart(payload []string) {
+	var (
+		opt           = echotron.MessageOptions{ParseMode: echotron.HTML}
+		text, botUser string
 	)
-	b.SendMessage(text, b.chatID, &echotron.MessageOptions{
-		ParseMode:             echotron.HTML,
-		DisableWebPagePreview: true,
-	})
+
+	if len(payload) == 0 {
+		if res, err := b.GetMe(); err == nil && res.Result != nil {
+			botUser = "@" + res.Result.Username
+		}
+		text = fmt.Sprint(
+			"👋 <b>Welcome duelist to ", botUser, "</b> <code>[BETA]</code>\n",
+			"If you are new I suggest you to see how to play using /help\n",
+			"Use me inline in to engage a fight against another user\n",
+			"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>",
+		)
+		opt.DisableWebPagePreview = true
+	} else {
+		switch payload[0] {
+		case "noob":
+			b.handleHelp()
+			return
+		case "acceptInvite":
+			b.handleAccept(payload[1:])
+			return
+		default:
+			text = "¯\\_(ツ)_/¯ Wrong format"
+		}
+	}
+	b.SendMessage(text, b.chatID, &opt)
+}
+
+func (b *bot) handleHelp() {
+	b.SendMessage("😈 No one is gonna help ya", b.chatID, nil)
 }
 
 func (b *bot) handleInvite(update *echotron.Update) {
-	if update.InlineQuery.ChatType == "private" {
-		b.AnswerInlineQuery(
-			update.InlineQuery.ID,
-			[]echotron.InlineQueryResult{
-				&echotron.InlineQueryResultArticle{
-					Type:        echotron.ARTICLE,
-					ID:          string(b.chatID),
-					Title:       "Engage a duel",
-					Description: "Invite this user to a duel",
-					ReplyMarkup: echotron.InlineKeyboardMarkup{
-						[][]echotron.InlineKeyboardButton{
-							{{Text: "✅ Accept", CallbackData: fmt.Sprint("/accept ", b.chatID)}},
-						},
-					},
-					InputMessageContent: echotron.InputTextMessageContent{
-						MessageText: "Do you have the guts to face me in a duel?",
+	var botUser string
+
+	if update.InlineQuery == nil {
+		return
+	}
+
+	if res, err := b.GetMe(); err == nil {
+		botUser = res.Result.Username
+	}
+	b.AnswerInlineQuery(
+		update.InlineQuery.ID,
+		[]echotron.InlineQueryResult{
+			&echotron.InlineQueryResultArticle{
+				Type:        echotron.ARTICLE,
+				ID:          string(b.chatID),
+				Title:       "Engage a duel",
+				Description: "Invite this user to a duel",
+				HideURL:     false,
+				ReplyMarkup: echotron.InlineKeyboardMarkup{
+					[][]echotron.InlineKeyboardButton{
+						{{Text: "✅ Accept", URL: fmt.Sprint("https://t.me/", botUser, "?start=acceptInvite_", b.chatID)}},
 					},
 				},
+				InputMessageContent: echotron.InputTextMessageContent{
+					MessageText: "Do you have the guts to face me in a duel?",
+				},
 			},
-			&echotron.InlineQueryOptions{
-				IsPersonal:        true,
-				SwitchPmText:      "What is this?",
-				SwitchPmParameter: "https://t.me/nbortkbijrjbwm_bot?start=noob",
-			},
-		)
-	}
+		},
+		&echotron.InlineQueryOptions{
+			CacheTime:         0,
+			IsPersonal:        true,
+			SwitchPmText:      "What is this?",
+			SwitchPmParameter: "noob",
+		},
+	)
+
 }
 
 func (b *bot) handleAccept(payload []string) {
 	var userID int64
 
-	if rawID, err := strconv.Atoi(payload[0]); err == nil {
+	if len(payload) != 1 {
+		b.SendMessage("¯\\_(ツ)_/¯ Wrong format", b.chatID, nil)
+		return
+	}
+	if rawID, err := strconv.Atoi(payload[0]); err != nil {
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	} else {
 		userID = int64(rawID)
+		if res, _ := b.GetMe(); res.Result.ID == userID {
+			b.SendMessage("Do you have a double personality? 👀", b.chatID, nil)
+			return
+		} else if userID == b.chatID {
+			b.SendMessage("Sorry I'm too busy now, maybe another time", b.chatID, nil)
+			return
+		}
 	}
 
 	// Check if player is busy in another duel or not
@@ -134,11 +176,22 @@ func (b *bot) TEMP_handleInvite(payload []string) {
 		},
 	}
 
+	if len(payload) != 1 {
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	}
 	if rawID, err := strconv.Atoi(payload[0]); err != nil {
 		b.SendMessage("Wrong format", b.chatID, nil)
 		return
 	} else {
 		userID = int64(rawID)
+		if res, _ := b.GetMe(); res.Result.ID == userID {
+			b.SendMessage("Do you have a double personality? 👀", b.chatID, nil)
+			return
+		} else if userID == b.chatID {
+			b.SendMessage("Sorry I'm too busy now, maybe another time", b.chatID, nil)
+			return
+		}
 	}
 
 	_, err := b.SendMessage(fmt.Sprint("😏 Do you have the guts to face ", name, " in a duel?"), userID, opt)
@@ -172,19 +225,20 @@ func (b *bot) handleFlee() {
 func (b *bot) Update(update *echotron.Update) {
 	var command, payload = extractCommand(update)
 
-	/* Work in progress...
+	// Work in progress...
 	if update.InlineQuery != nil {
 		b.handleInvite(update)
-	} */
+		return
+	}
 
 	// Outside a duel
 	switch command {
 	case "/start":
-		b.handleStart()
+		b.handleStart(payload)
 		return
 
 	case "/help":
-		b.SendMessage("😈 No one is gonna help ya", b.chatID, nil)
+		b.handleHelp()
 		return
 
 	case "/invite":

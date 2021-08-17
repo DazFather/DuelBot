@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/NicoNex/echotron/v3"
@@ -73,6 +74,12 @@ func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 	}
 
 	return
+}
+
+func ParseName(rawName string) string {
+	var rx = regexp.MustCompile("[_*\\[\\]\\(\\)~`>#+-=|{}.!]")
+
+	return rx.ReplaceAllString(rawName, "\\$0")
 }
 
 func genUserLink(userID int64) string {
