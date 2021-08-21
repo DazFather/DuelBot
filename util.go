@@ -77,7 +77,7 @@ func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 }
 
 func ParseName(rawName string) string {
-	var rx = regexp.MustCompile("[_*\\[\\]\\(\\)~`>#+-=|{}.!]")
+	var rx = regexp.MustCompile(`[\*\[\]\(\)\` + "`" + `~>#+\-=|{}.!]`)
 
 	return rx.ReplaceAllString(rawName, "\\$0")
 }

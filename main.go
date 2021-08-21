@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/NicoNex/echotron/v3"
 )
@@ -42,7 +43,8 @@ func (b *bot) handleStart(payload []string) {
 			"👋 <b>Welcome duelist to ", botUser, "</b> <code>[BETA]</code>\n",
 			"If you are new I suggest you to see how to play using /help\n",
 			"Use me inline in to engage a fight against another user\n",
-			"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>",
+			"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
+			" I'm also <a href=\"https://github.com/DazFather/DuelBot\">open source</a>",
 		)
 		opt.DisableWebPagePreview = true
 	} else {
@@ -116,10 +118,10 @@ func (b *bot) handleAccept(payload []string) {
 	} else {
 		userID = int64(rawID)
 		if res, _ := b.GetMe(); res.Result.ID == userID {
-			b.SendMessage("Do you have a double personality? 👀", b.chatID, nil)
+			b.SendMessage("Sorry I'm too busy now, maybe another time", b.chatID, nil)
 			return
 		} else if userID == b.chatID {
-			b.SendMessage("Sorry I'm too busy now, maybe another time", b.chatID, nil)
+			b.SendMessage("Do you have a double personality? 👀", b.chatID, nil)
 			return
 		}
 	}
@@ -147,16 +149,45 @@ func (b *bot) handleAction(payload []string) {
 		DisplayStatus(b.chatID, GetOpponentID(b.chatID), false)
 
 	case "GUARD", "ATTACK", "DEFEND", "DODGE":
-		SetPlayerMoves(b.chatID, payload[0])
+		// Don't do nothing if is the same action
+		if payload[0] == GetPlayerAction(b.chatID) {
+			return
+		}
+
+		// Set the player moves and update status
+		duration, err := SetPlayerMoves(b.chatID, payload[0])
+		if err != nil {
+			log.Println("handleAction", "SetPlayerMoves", err)
+			return
+		}
+		DisplayStatus(b.chatID, b.chatID, false)
+
+		// If enemy is on guard spy the action
 		enemyID := GetOpponentID(b.chatID)
 		if IsPlayerOnGuard(enemyID) {
 			b.SpyAction(enemyID, b.chatID, payload[0])
 		}
-		msg := fmt.Sprint(
-			"You are now ", Prettfy(payload[0], true, 1),
-			"\nPress or type \"Confirm\" to perform",
-		)
-		UpdateStatus(b.chatID, msg, false)
+
+		// Loop looking for a change in the enemy status
+		for i := 0; i < int(duration.Seconds())*2; i++ {
+			// if enemy is ready stop the loop
+			if IsPlayerReady(enemyID) {
+				break
+			}
+			time.Sleep(time.Duration(500) * time.Millisecond)
+			// if the user change action quit this process
+			if payload[0] != GetPlayerAction(b.chatID) {
+				return
+			}
+		}
+		if end, winnerID, _ := PlayersPerformMove(b.chatID); end {
+			if winnerID == 0 {
+				b.NotifyDraw()
+			} else {
+				b.NotifyEndDuel(winnerID)
+			}
+			EndDuel(b.chatID)
+		}
 
 	default:
 		b.SendMessage("¯\\_(ツ)_/¯", b.chatID, nil)
@@ -202,16 +233,6 @@ func (b *bot) TEMP_handleInvite(payload []string) {
 	}
 }
 
-func (b *bot) handleConfirm() {
-	if !IsPlayerBusy(b.chatID) {
-		b.SendMessage("¯\\_(ツ)_/¯ You are not in a battle", b.chatID, nil)
-	}
-	if isEnded, err := PlayersPerformMove(b.chatID); isEnded && err == nil {
-		b.NotifyEndDuel(IsPlayerWinner(b.chatID))
-		EndDuel(b.chatID)
-	}
-}
-
 func (b *bot) handleFlee() {
 	if IsPlayerBusy(b.chatID) {
 		b.NotifyCancel()
@@ -225,7 +246,7 @@ func (b *bot) handleFlee() {
 func (b *bot) Update(update *echotron.Update) {
 	var command, payload = extractCommand(update)
 
-	// Work in progress...
+	// Inviting a user with inline mode
 	if update.InlineQuery != nil {
 		b.handleInvite(update)
 		return
@@ -263,9 +284,6 @@ func (b *bot) Update(update *echotron.Update) {
 	case "/action":
 		b.handleAction(payload)
 
-	case "Confirm":
-		b.handleConfirm()
-
 	case "/end", "/flee":
 		b.handleFlee()
 	}
@@ -274,6 +292,7 @@ func (b *bot) Update(update *echotron.Update) {
 func main() {
 	if TOKEN == "" {
 		fmt.Println("Missing TOKEN value")
+		return
 	}
 	dsp := echotron.NewDispatcher(TOKEN, newBot)
 	log.Println(dsp.Poll())
