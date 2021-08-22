@@ -42,7 +42,7 @@ func (b *bot) handleStart(payload []string) {
 		text = fmt.Sprint(
 			"👋 <b>Welcome duelist to ", botUser, "</b> <code>[BETA]</code>\n",
 			"If you are new I suggest you to see how to play using /help\n",
-			"Use me inline in to engage a fight against another user\n",
+			"\n",
 			"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
 			" I'm also <a href=\"https://github.com/DazFather/DuelBot\">open source</a>",
 		)
@@ -52,7 +52,7 @@ func (b *bot) handleStart(payload []string) {
 		case "noob":
 			b.handleHelp()
 			return
-		case "acceptInvite":
+		case "joinDuel":
 			b.handleAccept(payload[1:])
 			return
 		default:
@@ -67,15 +67,10 @@ func (b *bot) handleHelp() {
 }
 
 func (b *bot) handleInvite(update *echotron.Update) {
-	var botUser string
-
 	if update.InlineQuery == nil {
 		return
 	}
 
-	if res, err := b.GetMe(); err == nil {
-		botUser = res.Result.Username
-	}
 	b.AnswerInlineQuery(
 		update.InlineQuery.ID,
 		[]echotron.InlineQueryResult{
@@ -87,7 +82,7 @@ func (b *bot) handleInvite(update *echotron.Update) {
 				HideURL:     false,
 				ReplyMarkup: echotron.InlineKeyboardMarkup{
 					[][]echotron.InlineKeyboardButton{
-						{{Text: "✅ Accept", URL: fmt.Sprint("https://t.me/", botUser, "?start=acceptInvite_", b.chatID)}},
+						{{Text: "✅ Accept", URL: b.GenInvitationLink()}},
 					},
 				},
 				InputMessageContent: echotron.InputTextMessageContent{
@@ -96,7 +91,7 @@ func (b *bot) handleInvite(update *echotron.Update) {
 			},
 		},
 		&echotron.InlineQueryOptions{
-			CacheTime:         0,
+			CacheTime:         1, // Sadly (and very annoyingly) echotron does not support 0 cache
 			IsPersonal:        true,
 			SwitchPmText:      "What is this?",
 			SwitchPmParameter: "noob",
@@ -108,7 +103,7 @@ func (b *bot) handleInvite(update *echotron.Update) {
 func (b *bot) handleAccept(payload []string) {
 	var userID int64
 
-	if len(payload) != 1 {
+	if len(payload) != 2 {
 		b.SendMessage("¯\\_(ツ)_/¯ Wrong format", b.chatID, nil)
 		return
 	}
@@ -117,15 +112,12 @@ func (b *bot) handleAccept(payload []string) {
 		return
 	} else {
 		userID = int64(rawID)
-		if res, _ := b.GetMe(); res.Result.ID == userID {
-			b.SendMessage("Sorry I'm too busy now, maybe another time", b.chatID, nil)
-			return
-		} else if userID == b.chatID {
-			b.SendMessage("Do you have a double personality? 👀", b.chatID, nil)
-			return
-		}
 	}
 
+	if errMess := b.IsInvitionValid(userID, payload[1]); errMess != "" {
+		b.SendMessage(errMess, b.chatID, nil)
+		return
+	}
 	// Check if player is busy in another duel or not
 	if !EngageDuel(b.chatID, userID) {
 		b.SendMessage("You or your opponent might be already engaged in another fight. Brawls are still not allowed", b.chatID, nil)
@@ -263,6 +255,10 @@ func (b *bot) Update(update *echotron.Update) {
 		return
 
 	case "/invite":
+		b.SendMessage(b.GenInvitationLink(), b.chatID, nil)
+		return
+
+	case "/inviteid":
 		b.TEMP_handleInvite(payload)
 		return
 
