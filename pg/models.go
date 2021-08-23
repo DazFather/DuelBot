@@ -39,9 +39,9 @@ type effect struct {
 // Creature
 type Creature struct {
 	hp         int           // health points
-	damage     int           // (constant) max damage that is capable of dealing
-	stamina    int           // how fast it is. It fill influence the duration
-	maxStamina int           // max level of stamina
+	damage     uint          // (constant) max damage that is capable of dealing
+	stamina    uint          // how fast it is. It fill influence the duration
+	maxStamina uint          // max level of stamina
 	action     Status        // action he is doing
 	duration   time.Duration // duration of the action
 	effects    []effect      // list of effects

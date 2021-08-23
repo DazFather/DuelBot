@@ -81,7 +81,7 @@ func SetPlayerMoves(ownerID int64, move string) (time.Duration, error) {
 		return time.Duration(0), errors.New("Invalid player move: \"" + move + "\"")
 	}
 
-	return Players[ownerID].stats.SetAction(action), nil
+	return Players[ownerID].stats.SetAction(action)
 }
 
 func EngageDuel(firstOwnerID, secondOwnerID int64) bool {
@@ -142,8 +142,7 @@ func PlayersPerformMove(ownerID int64) (end bool, winnerID int64, err error) {
 }
 
 func IsPlayerWinner(ownerID int64) bool {
-	health, _, _ := GetOpponentOf(ownerID).stats.GetInfo()
-	return health <= 0
+	return GetOpponentOf(ownerID).stats.IsDead()
 }
 
 func EndDuel(userID int64) {
@@ -165,7 +164,7 @@ func GetOpponentID(userID int64) int64 {
 	return Players[userID].enemyID
 }
 
-func GetPlayerInfo(ownerID int64) (life, agility, maxStamina int) {
+func GetPlayerInfo(ownerID int64) (life int, agility, maxStamina, damage uint) {
 	return Players[ownerID].stats.GetInfo()
 }
 

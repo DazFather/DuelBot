@@ -21,7 +21,7 @@ func (c *Creature) gainEnergy(response *InvokeRes) {
 	}
 }
 
-func calcSpeed(stamina, max int) (speed time.Duration) {
+func calcSpeed(stamina, max uint) (speed time.Duration) {
 	seconds := max + 1 - stamina
 	speed = time.Duration(seconds) * time.Second
 	return
@@ -29,10 +29,6 @@ func calcSpeed(stamina, max int) (speed time.Duration) {
 
 func (c *Creature) resetAction() {
 	c.action = HELPLESS
-}
-
-func (c Creature) isDead() bool {
-	return c.hp <= 0
 }
 
 func isEffect(actionOrEffect Status) bool {
@@ -135,8 +131,8 @@ func (attacking *Creature) attack(enemy Creature) (response InvokeRes) {
 	attacking.useEnergy(&response)
 
 	if enemy.action == ATTACK {
-		attacking.hp -= enemy.damage
-		response.LifeOffset = -enemy.damage
+		attacking.hp -= int(enemy.damage)
+		response.LifeOffset = -int(enemy.damage)
 	}
 
 	return
@@ -144,7 +140,7 @@ func (attacking *Creature) attack(enemy Creature) (response InvokeRes) {
 
 func (defending *Creature) defend(enemy Creature) (response InvokeRes) {
 	if enemy.action == ATTACK {
-		response.LifeOffset = -enemy.damage / 2
+		response.LifeOffset = -int(enemy.damage) / 2
 		defending.hp += response.LifeOffset
 		return
 	}
@@ -157,8 +153,8 @@ func (dodging *Creature) dodge(enemy Creature) (response InvokeRes) {
 	if dodging.duration > enemy.duration {
 		switch enemy.action {
 		case ATTACK:
-			dodging.hp -= enemy.damage
-			response.LifeOffset = -enemy.damage
+			dodging.hp -= int(enemy.damage)
+			response.LifeOffset = -int(enemy.damage)
 		case DEFEND:
 			response.GainEffect = stun(dodging)
 		}
@@ -172,8 +168,8 @@ func (dodging *Creature) dodge(enemy Creature) (response InvokeRes) {
 func (sleeping *Creature) sleep(enemy Creature) (response InvokeRes) {
 	switch enemy.action {
 	case ATTACK:
-		sleeping.hp -= enemy.damage
-		response.LifeOffset = -enemy.damage
+		sleeping.hp -= int(enemy.damage)
+		response.LifeOffset = -int(enemy.damage)
 	case DEFEND:
 		if !sleeping.isOnStatus(STUNNED) {
 			response.GainEffect = stun(sleeping)

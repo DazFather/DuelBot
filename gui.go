@@ -70,10 +70,10 @@ func GenOffsetInfoBar(lifeOffset, staminaOffset, damageDealt int) string {
 
 // Generate the info bar with life points and stamina bar
 func genInfoBar(userID int64) string {
-	life, stamina, max := GetPlayerInfo(userID)
+	life, stamina, max, _ := GetPlayerInfo(userID)
 	return fmt.Sprint(
 		"❤:", "<code>", life, "</code>",
-		" ⚡:[<code>", strings.Repeat("#", stamina), strings.Repeat(" ", max-stamina), "</code>]",
+		" ⚡:[<code>", strings.Repeat("#", int(stamina)), strings.Repeat(" ", int(max-stamina)), "</code>]",
 	)
 }
 
