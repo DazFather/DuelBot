@@ -14,8 +14,8 @@ type bot struct {
 	echotron.API
 }
 
-// TOKEN is the bot's token.
-const TOKEN = ""
+// TOKEN is the Telegram API bot's token.
+var TOKEN string
 
 func newBot(chatID int64) echotron.Bot {
 	api := echotron.NewAPI(TOKEN)
@@ -286,9 +286,11 @@ func (b *bot) Update(update *echotron.Update) {
 }
 
 func main() {
-	if TOKEN == "" {
-		fmt.Println("Missing TOKEN value")
+	if rawToken, err := LoadToken(); err != nil {
+		fmt.Println(err)
 		return
+	} else {
+		TOKEN = rawToken
 	}
 	dsp := echotron.NewDispatcher(TOKEN, newBot)
 	log.Println(dsp.Poll())
