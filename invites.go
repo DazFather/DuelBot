@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 )
 
 // Register user chatID -> inviteID
@@ -29,6 +31,29 @@ func incrChar(char *rune) {
 	}
 }
 
+// Return a copy of the inviteID with 3 random chars before and after
+func addRandChars(rawInviteID []rune) (inviteID []rune) {
+	var chunk [2][3]rune
+
+	rand.Seed(time.Now().UnixNano())
+	for j := 0; j < 2; j++ {
+		for i := 0; i < 3; i++ {
+			switch rand.Intn(3) {
+			case 0:
+				chunk[j][i] = rune(rand.Intn(10) + 48)
+			case 1:
+				chunk[j][i] = rune(rand.Intn(26) + 65)
+			case 2:
+				chunk[j][i] = rune(rand.Intn(26) + 97)
+			}
+		}
+	}
+	inviteID = append(inviteID, chunk[0][:]...)
+	inviteID = append(inviteID, rawInviteID...)
+	inviteID = append(inviteID, chunk[1][:]...)
+	return
+}
+
 // increment the passed inviteID
 func incrInviteID(inviteID []rune) {
 	var i = len(inviteID) - 1
@@ -50,9 +75,12 @@ func NewInviteID(userID int64) string {
 	var inviteID = getInviteID(userID)
 	if inviteID == nil {
 		inviteID = []rune{'0'}
+	} else {
+		inviteID = inviteID[3 : len(inviteID)-3]
 	}
 
 	incrInviteID(inviteID)
+	inviteID = addRandChars(inviteID)
 	setInviteID(userID, inviteID)
 	return string(inviteID)
 }
