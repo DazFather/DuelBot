@@ -214,7 +214,7 @@ func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 	var IDs = [2]int64{firstID, secondID}
 
 	for i, currentID := range IDs {
-		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1 -i]))
+		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1-i]))
 		b.SendMessage(
 			fmt.Sprint("Duel against ", user, " is now starting 🏁"),
 			currentID,

@@ -122,7 +122,7 @@ func LoadToken() (token string, err error) {
 		token = os.Args[1]
 
 	case 3:
-		if strings.ToUpper(os.Args[1]) != "READFROM" {
+		if strings.ToUpper(os.Args[1]) != "--READFROM" {
 			return "", errors.New("Invalid format")
 		}
 		if content, err := os.ReadFile(os.Args[2]); err != nil {
