@@ -55,19 +55,6 @@ func fatigue(c *Creature) Status {
 	return EXAUSTED
 }
 
-func (c Creature) isOnStatus(actionOrEffect Status) bool {
-	if isEffect(actionOrEffect) {
-		for _, eff := range c.effects {
-			if eff.symptom == actionOrEffect {
-				return true
-			}
-		}
-		return false
-	}
-
-	return c.action == actionOrEffect
-}
-
 func (c *Creature) reduceEffects() {
 	var newEffects []effect
 
@@ -96,9 +83,9 @@ func (c *Creature) perform(enemy Creature) (response InvokeRes) {
 	case GUARD, HELPLESS:
 		response = c.sleep(enemy)
 		if len(c.effects) > 0 {
-			if c.isOnStatus(STUNNED) {
+			if c.IsOnStatus(STUNNED) {
 				response.Performed = STUNNED
-			} else if c.isOnStatus(EXAUSTED) {
+			} else if c.IsOnStatus(EXAUSTED) {
 				response.Performed = EXAUSTED
 			}
 			c.reduceEffects()
@@ -171,7 +158,7 @@ func (sleeping *Creature) sleep(enemy Creature) (response InvokeRes) {
 		sleeping.hp -= int(enemy.damage)
 		response.LifeOffset = -int(enemy.damage)
 	case DEFEND:
-		if !sleeping.isOnStatus(STUNNED) {
+		if !sleeping.IsOnStatus(STUNNED) {
 			response.GainEffect = stun(sleeping)
 		}
 	}

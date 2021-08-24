@@ -22,7 +22,7 @@ func (c Creature) IsDead() bool {
 	return c.hp <= 0
 }
 
-/* Two freature perform their actions aginst each other and it returns:
+/* Two creature perform their actions aginst each other and it returns:
  * winner - a flag who indicates the winner creature (0 -> none, -1 -> draw, 1 -> c1, 2 -> c2)
  * responses - the responses of the actions performed (c1 -> responses[0], c2 -> responses[1])
  */
@@ -51,7 +51,7 @@ func PerformAction(c1, c2 *Creature) (winner int8, responses [2]InvokeRes) {
 
 // Creature will try to prepare a certain action (choose between GUARD, ATTACK, DEFEND, DODGE)
 func (c *Creature) SetAction(action Status) (time.Duration, error) {
-	if c.isOnStatus(STUNNED) || !c.isOnStatus(EXAUSTED) {
+	if c.IsOnStatus(STUNNED) || c.IsOnStatus(EXAUSTED) {
 		return c.duration, nil
 	}
 
@@ -90,7 +90,16 @@ func (c Creature) GetStatus() (action Status, effects []Status) {
 	return
 }
 
-// Check if during the battle a creature got a new effect
-func (r InvokeRes) HasGotEffected() bool {
-	return r.Performed == HELPLESS && r.GainEffect != HELPLESS
+// Check if a creature is on particular status (can be action or effect)
+func (c Creature) IsOnStatus(actionOrEffect Status) bool {
+	if isEffect(actionOrEffect) {
+		for _, eff := range c.effects {
+			if eff.symptom == actionOrEffect {
+				return true
+			}
+		}
+		return false
+	}
+
+	return c.action == actionOrEffect
 }
