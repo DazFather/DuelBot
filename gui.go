@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/NicoNex/echotron/v3"
@@ -70,7 +71,10 @@ func GenOffsetInfoBar(lifeOffset, staminaOffset, damageDealt int) string {
 
 // Generate the info bar with life points and stamina bar
 func genInfoBar(userID int64) string {
-	life, stamina, max, _ := GetPlayerInfo(userID)
+	life, stamina, max, _, err := GetPlayerInfo(userID)
+	if err != nil {
+		return ""
+	}
 	return fmt.Sprint(
 		"❤:", "<code>", life, "</code>",
 		" ⚡:[<code>", strings.Repeat("#", int(stamina)), strings.Repeat(" ", int(max-stamina)), "</code>]",
@@ -79,13 +83,17 @@ func genInfoBar(userID int64) string {
 
 // Generate the info bar with the action of the player
 func genActionBar(userID int64) string {
-	return fmt.Sprint("Action: <b>", Prettfy(GetPlayerAction(userID), true, 1), "</b>")
+	move, err := GetPlayerAction(userID)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprint("Action: <b>", Prettfy(move, true, 1), "</b>")
 }
 
 // Warn a user of the new status of the opponent
 func (b *bot) SpyAction(toUserID, opponentID int64, move string) {
 	text := fmt.Sprint(
-		"👁‍🗨 <b><a href=\"tg://user?id=", opponentID, "\">Enemy</a> is ",
+		"👁‍🗨 <b>", genUserLink(opponentID, "Enemy"), " is ",
 		strings.ToLower(Prettfy(move, true, 1)), "</b>\n",
 		"Hurry up and prepare your counter-move!\n",
 		"\n<i>You are able to recive this notification because you are on guard</i>",
@@ -93,7 +101,45 @@ func (b *bot) SpyAction(toUserID, opponentID int64, move string) {
 	UpdateStatus(toUserID, text, false)
 }
 
-// Notify the Result of a perform
+func (b *bot) NotifyBattleReport(report BattleReport) {
+	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
+
+	for i, r := range report.PlayersInfo {
+		msg := ""
+		enemy := report.PlayersInfo[1-i]
+
+		if r.GainEffect != nil {
+			msg = "<b>You got " + Prettfy(*r.GainEffect, false, 1) + "</b>"
+		}
+
+		if r.Performed != "HELPLESS" {
+			msg += "\nYou %s" + Prettfy(r.Performed, false, 1) + "%s"
+			if r.Success {
+				msg = fmt.Sprintf(msg, "", " successfully\nmeanwhile")
+			} else {
+				msg = fmt.Sprintf(msg, "tried to ", " but...")
+			}
+		}
+
+		if enemy.Performed != "HELPLESS" {
+			msg += "\nEnemy was " + Prettfy(enemy.Performed, true, 1)
+		}
+
+		if enemy.GainEffect != nil {
+			msg += "\n<b>Enemy got " + Prettfy(*enemy.GainEffect, false, 1) + "</b>"
+		}
+
+		msg += "\n\n" + GenOffsetInfoBar(r.LifeOff, r.StaminaOff, enemy.LifeOff)
+
+		b.SendMessage(msg, r.UserID, &opt)
+
+		if !report.EndDuel {
+			DisplayStatus(r.UserID, r.UserID, true)
+		}
+	}
+}
+
+// Notify the result of a perform
 func NotifyResult(userID int64, success bool, move, enemyMoves, infos string) {
 	var descr string
 
@@ -126,8 +172,8 @@ func DisplayStatus(toUserID, ofUserID int64, newMessage bool) {
 	if toUserID == ofUserID {
 		text = fmt.Sprint("🏷 <b>Your</b> current status:\n", genActionBar(ofUserID))
 	} else {
-		text = fmt.Sprint("👤 <b><a href=\"tg://user?id=", ofUserID, "\">Enemy</a></b> current status:")
-		if GetPlayerAction(toUserID) == "GUARD" {
+		text = fmt.Sprint("👤 <b>", genUserLink(ofUserID, "Enemy"), "</b> current status:")
+		if onGurad, _ := IsPlayerOnGuard(toUserID); onGurad {
 			text += "\n" + genActionBar(ofUserID)
 		}
 	}
@@ -164,15 +210,13 @@ func genActionKbd() (markup echotron.InlineKeyboardMarkup) {
 }
 
 // Notify the users that the duel is starting
-func NotifyAcceptDuel(firstID, secondID int64) {
-	var (
-		b   = echotron.NewAPI(TOKEN)
-		IDs = [2]int64{firstID, secondID}
-	)
+func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
+	var IDs = [2]int64{firstID, secondID}
 
 	for i, currentID := range IDs {
+		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1 -i]))
 		b.SendMessage(
-			fmt.Sprint("Duel against ", genUserLink(IDs[1-i]), " is now starting 🏁"),
+			fmt.Sprint("Duel against ", user, " is now starting 🏁"),
 			currentID,
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
@@ -181,10 +225,17 @@ func NotifyAcceptDuel(firstID, secondID int64) {
 }
 
 func (b *bot) NotifyDraw() {
-	var IDs = []int64{b.chatID, GetOpponentID(b.chatID)}
+	opponentID, err := GetOpponentID(b.chatID)
+	if err != nil {
+		log.Println("GetOpponentID", err)
+		return
+	}
+
+	IDs := []int64{b.chatID, opponentID}
 	for i, id := range IDs {
+		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1-i]))
 		b.SendMessage(
-			"⚖️ <b>The match is a draw</b> in the battle against "+genUserLink(IDs[1-i])+"\n",
+			fmt.Sprint("⚖️ <b>The match is a draw</b> in the battle against ", user, "\n"),
 			id,
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
@@ -193,19 +244,23 @@ func (b *bot) NotifyDraw() {
 
 // Notify the users of the end of a match
 func (b *bot) NotifyEndDuel(winnerID int64) {
-	var (
-		opt      = echotron.MessageOptions{ParseMode: echotron.HTML}
-		looserID = GetOpponentID(winnerID)
-	)
+	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
+
+	looserID, err := GetOpponentID(winnerID)
+	if err != nil {
+		log.Println("NotifyEndDuel", "GetOpponentID", err)
+		return
+	}
+	winnerName, looserName := b.GetPlayerName(winnerID), b.GetPlayerName(looserID)
 
 	text := fmt.Sprint(
-		"🥇 <b>You win</b> in the battle against ", genUserLink(looserID), "\n",
-		"<i>Congratulation ", GetPlayerName(winnerID), " the big spirit of the war is proud of you</i>",
+		"🥇 <b>You win</b> in the battle against ", genUserLink(looserID, looserName), "\n",
+		"<i>Congratulation ", winnerName, " the big spirit of the war is proud of you</i>",
 	)
 	b.SendMessage(text, winnerID, &opt)
 
 	text = fmt.Sprint(
-		"☠ <b>You loose</b> the battle against ", genUserLink(winnerID), "\n",
+		"☠ <b>You loose</b> the battle against ", genUserLink(winnerID, winnerName), "\n",
 		"<i>I hope that the guardian spirit can assist you in the next battle</i>",
 	)
 	b.SendMessage(text, looserID, &opt)
@@ -213,19 +268,22 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 
 // Notify the users of the withdrawn of some of the two
 func (b *bot) NotifyCancel() {
-	var (
-		opt      = echotron.MessageOptions{ParseMode: echotron.HTML}
-		winnerID = GetOpponentID(b.chatID)
-	)
+	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
+
+	winnerID, err := GetOpponentID(b.chatID)
+	if err != nil {
+		log.Println("NotifyCancel", "GetOpponentID", err)
+		return
+	}
 
 	text := fmt.Sprint(
-		"🏳️ <b>You flee</b> from the battle against ", genUserLink(winnerID), "\n",
+		"🏳️ <b>You flee</b> from the battle against ", genUserLink(winnerID, b.GetPlayerName(winnerID)), "\n",
 		"<i>The big spirit of the war will not like this behaviour...</i>",
 	)
 	b.SendMessage(text, b.chatID, &opt)
 
 	text = fmt.Sprint(
-		"🏃 <b>Your <a href=\"tg://user?id=", b.chatID, "\">opponent</a> has withdrawn</b>\n",
+		"🏃 <b>Your ", genUserLink(b.chatID, "opponent"), " has withdrawn</b>\n",
 		"<i>Probably you are too strong for him or maybe he doesn't like your face...</i>",
 	)
 	b.SendMessage(text, winnerID, &opt)

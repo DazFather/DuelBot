@@ -48,14 +48,21 @@ func extractCommand(update *echotron.Update) (command string, payload []string) 
 	return
 }
 
+// Update the menuID with the status of the player
 func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 	var (
-		b   = echotron.NewAPI(TOKEN)
-		res echotron.APIResponseMessage
+		menuID int
+		b      = echotron.NewAPI(TOKEN)
+		res    echotron.APIResponseMessage
 	)
 
 	if !newMessage {
-		messageID := echotron.NewMessageID(userID, GetPlayerMenuID(userID))
+		menuID, err = GetPlayerMenuID(userID)
+		if err != nil {
+			log.Println("UpdateStatus", "GetPlayerMenuID", err)
+			return
+		}
+		messageID := echotron.NewMessageID(userID, menuID)
 		_, err = b.EditMessageText(text, messageID, &echotron.MessageTextOptions{
 			ParseMode:   echotron.HTML,
 			ReplyMarkup: genActionKbd(),
@@ -84,13 +91,14 @@ func ParseName(rawName string) string {
 	return rx.ReplaceAllString(rawName, "\\$0")
 }
 
-func genUserLink(userID int64) string {
-	return fmt.Sprint("<a href=\"tg://user?id=", userID, "\">", GetPlayerName(userID), "</a>")
+// Vreating an HTML link to the specified user
+func genUserLink(userID int64, name string) string {
+	return fmt.Sprint("<a href=\"tg://user?id=", userID, "\">", name, "</a>")
 }
 
 // It try to detect id a string is a vaild token
 func validateToken(token string) error {
-	match, err := regexp.MatchString(`\d+:[\w_\-]+`, token)
+	match, err := regexp.MatchString(`\d+:[\w\-]+`, token)
 	if err != nil {
 		return err
 	}
@@ -128,5 +136,19 @@ func LoadToken() (token string, err error) {
 	}
 
 	err = validateToken(token)
+	return
+}
+
+// Get the name of a player
+func (b *bot) GetPlayerName(chatID int64) (name string) {
+	res, err := b.GetChat(chatID)
+	if err != nil || res.Result == nil {
+		return "Unknown User"
+	}
+	name = ParseName(res.Result.FirstName)
+	if name == "" {
+		name = "Unknown User"
+	}
+
 	return
 }

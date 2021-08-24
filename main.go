@@ -18,15 +18,7 @@ type bot struct {
 var TOKEN string
 
 func newBot(chatID int64) echotron.Bot {
-	api := echotron.NewAPI(TOKEN)
-
-	if res, err := api.GetChat(chatID); err == nil {
-		if res.Result != nil && res.Result.Type == "private" {
-			AddNewPlayer(chatID, ParseName(res.Result.FirstName))
-		}
-	}
-
-	return &bot{chatID, api}
+	return &bot{chatID, echotron.NewAPI(TOKEN)}
 }
 
 func (b *bot) handleStart(payload []string) {
@@ -124,10 +116,16 @@ func (b *bot) handleAccept(payload []string) {
 		return
 	}
 
-	NotifyAcceptDuel(b.chatID, userID)
+	b.NotifyAcceptDuel(b.chatID, userID)
 }
 
 func (b *bot) handleAction(payload []string) {
+	var (
+		duration time.Duration
+		enemyID  int64
+		err      error
+	)
+
 	if !IsPlayerBusy(b.chatID) {
 		b.SendMessage("Calm down warrior... you are not in a fight anymore", b.chatID, nil)
 		return
@@ -138,16 +136,21 @@ func (b *bot) handleAction(payload []string) {
 		DisplayStatus(b.chatID, b.chatID, false)
 
 	case "ENEMY":
-		DisplayStatus(b.chatID, GetOpponentID(b.chatID), false)
+		enemyID, err = GetOpponentID(b.chatID)
+		if err != nil {
+			log.Println("handleAction", "GetOpponentID", err)
+			return
+		}
+		DisplayStatus(b.chatID, enemyID, false)
 
 	case "GUARD", "ATTACK", "DEFEND", "DODGE":
 		// Don't do nothing if is the same action
-		if payload[0] == GetPlayerAction(b.chatID) {
+		if move, _ := GetPlayerAction(b.chatID); move == payload[0] {
 			return
 		}
 
 		// Set the player moves and update status
-		duration, err := SetPlayerMoves(b.chatID, payload[0])
+		duration, err = SetPlayerMoves(b.chatID, payload[0])
 		if err != nil {
 			log.Println("handleAction", "SetPlayerMoves", err)
 			return
@@ -155,31 +158,55 @@ func (b *bot) handleAction(payload []string) {
 		DisplayStatus(b.chatID, b.chatID, false)
 
 		// If enemy is on guard spy the action
-		enemyID := GetOpponentID(b.chatID)
-		if IsPlayerOnGuard(enemyID) {
+		enemyID, err = GetOpponentID(b.chatID)
+		if err != nil {
+			log.Println("handleAction", "GetOpponentID", err)
+			return
+		}
+
+		if onGurad, _ := IsPlayerOnGuard(enemyID); onGurad {
 			b.SpyAction(enemyID, b.chatID, payload[0])
 		}
 
 		// Loop looking for a change in the enemy status
-		for i := 0; i < int(duration.Seconds())*2; i++ {
+		start := time.Now()
+		for time.Since(start).Milliseconds() < duration.Milliseconds() {
 			// if enemy is ready stop the loop
-			if IsPlayerReady(enemyID) {
+			if ready, err := IsPlayerReady(enemyID); err != nil {
+				log.Println("handleAction", "IsPlayerReady", err)
+				return
+			} else if ready {
 				break
 			}
+
 			time.Sleep(time.Duration(500) * time.Millisecond)
 			// if the user change action quit this process
-			if payload[0] != GetPlayerAction(b.chatID) {
+			if move, _ := GetPlayerAction(b.chatID); move != payload[0] {
 				return
 			}
 		}
-		if end, winnerID, _ := PlayersPerformMove(b.chatID); end {
-			if winnerID == 0 {
-				b.NotifyDraw()
-			} else {
-				b.NotifyEndDuel(winnerID)
-			}
-			EndDuel(b.chatID)
+
+		// Perform the action between players and his opponent
+		report, err := PlayersPerformMove(b.chatID)
+		if err != nil {
+			log.Println("handleAction", "PlayersPerformMove", err)
+			return
 		}
+
+		// Notify users
+		b.NotifyBattleReport(report)
+		if !report.EndDuel {
+			return
+		}
+		if report.WinnerID == nil {
+			b.NotifyDraw()
+		} else {
+			fmt.Println("winner:", *report.WinnerID)
+			b.NotifyEndDuel(*report.WinnerID)
+		}
+
+		// End duel (if duel ended)
+		EndDuel(b.chatID)
 
 	default:
 		b.SendMessage("¯\\_(ツ)_/¯", b.chatID, nil)
@@ -188,7 +215,7 @@ func (b *bot) handleAction(payload []string) {
 
 func (b *bot) TEMP_handleInvite(payload []string) {
 	var (
-		name   = fmt.Sprintf("[%s](tg://user?id=%d)", GetPlayerName(b.chatID), b.chatID)
+		name   = fmt.Sprintf("[%s](tg://user?id=%d)", b.GetPlayerName(b.chatID), b.chatID)
 		opt    = &echotron.MessageOptions{ParseMode: echotron.MarkdownV2}
 		userID int64
 	)
