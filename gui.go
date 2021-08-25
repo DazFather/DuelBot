@@ -87,13 +87,13 @@ func genActionBar(userID int64) string {
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprint("Action: <b>", Prettfy(move, true, 1), "</b>")
+	return fmt.Sprint("<b>", Prettfy(move, true, 1), "</b>")
 }
 
 // Warn a user of the new status of the opponent
 func (b *bot) SpyAction(toUserID, opponentID int64, move string) {
 	text := fmt.Sprint(
-		"👁‍🗨 <b>", genUserLink(opponentID, "Enemy"), " is ",
+		"👁‍🗨 <b>", GenUserLink(opponentID, "Enemy"), " is ",
 		strings.ToLower(Prettfy(move, true, 1)), "</b>\n",
 		"Hurry up and prepare your counter-move!\n",
 		"\n<i>You are able to recive this notification because you are on guard</i>",
@@ -135,42 +135,48 @@ func (b *bot) NotifyBattleReport(report BattleReport) {
 		b.SendMessage(msg, r.UserID, &opt)
 
 		if !report.EndDuel {
-			DisplayStatus(r.UserID, r.UserID, true)
+			DisplayStatus(r.UserID, true)
 		}
 	}
 }
 
 // Display the current status of a user
-func DisplayStatus(toUserID, ofUserID int64, newMessage bool) {
+func DisplayStatus(toUserID int64, newMessage bool) {
 	var text string
 
-	if toUserID == ofUserID {
-		text = fmt.Sprint("🏷 <b>Your</b> current status:\n", genActionBar(ofUserID))
+	enemyID, _ := GetOpponentID(toUserID)
+
+	text = fmt.Sprint(
+		"🏷 <b>You</b>: ", genInfoBar(toUserID), "\n\n",
+		"👤 <b>", GenUserLink(enemyID, "Enemy"), "</b>",
+	)
+	if onGurad, _ := IsPlayerOnGuard(toUserID); onGurad {
+		text += " current status: " + genActionBar(enemyID) + "\n"
 	} else {
-		text = fmt.Sprint("👤 <b>", genUserLink(ofUserID, "Enemy"), "</b> current status:")
-		if onGurad, _ := IsPlayerOnGuard(toUserID); onGurad {
-			text += "\n" + genActionBar(ofUserID)
-		}
+		text += ": "
 	}
-	text = fmt.Sprint(text, "\n", genInfoBar(ofUserID))
+	text += genInfoBar(enemyID)
 
 	UpdateStatus(toUserID, text, newMessage)
 }
 
 // Generate the inline keyboard with all the actions
-func genActionKbd() (markup echotron.InlineKeyboardMarkup) {
+func genActionKbd(move string) (markup echotron.InlineKeyboardMarkup) {
 	var (
-		mainActions = []string{"ME", "ENEMY", "GUARD", "ATTACK", "DEFEND", "DODGE"}
+		mainActions = []string{"GUARD", "ATTACK", "DEFEND", "DODGE"}
 		row         []echotron.InlineKeyboardButton
 	)
 
 	for i, action := range mainActions {
-		row = append(row,
-			echotron.InlineKeyboardButton{
-				Text:         Prettfy(action, false, -1),
-				CallbackData: fmt.Sprint("/action ", action),
-			},
-		)
+		btn := echotron.InlineKeyboardButton{CallbackData: "/action " + action}
+
+		if move == action {
+			btn.Text = "▶️ " + Prettfy(action, false, 0) + " ◀️"
+		} else {
+			btn.Text = Prettfy(action, false, -1)
+		}
+		row = append(row, btn)
+
 		if (i+1)%2 == 0 {
 			markup.InlineKeyboard = append(markup.InlineKeyboard, row)
 			row = nil
@@ -185,12 +191,12 @@ func genActionKbd() (markup echotron.InlineKeyboardMarkup) {
 }
 
 // Generate the inline keyboard with all the actions
-func genRematchKbd(opponentID int64, opponentName string) (markup *echotron.MessageReplyMarkup) {
+func genRematchKbd(opponentID int64) (markup *echotron.MessageReplyMarkup) {
 	var kbd echotron.InlineKeyboardMarkup
 
 	kbd.InlineKeyboard = [][]echotron.InlineKeyboardButton{{{
 		Text:         "🔄 Rematch",
-		CallbackData: fmt.Sprintf("/rematch %d %s", opponentID, opponentName),
+		CallbackData: fmt.Sprint("/rematch ", opponentID),
 	}}}
 
 	return &echotron.MessageReplyMarkup{kbd}
@@ -201,13 +207,13 @@ func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 	var IDs = [2]int64{firstID, secondID}
 
 	for i, currentID := range IDs {
-		user := genUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
+		user := GenUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
 		b.SendMessage(
 			fmt.Sprint("Duel against ", user, " is now starting 🏁"),
 			currentID,
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
-		DisplayStatus(currentID, currentID, true)
+		DisplayStatus(currentID, true)
 	}
 }
 
@@ -220,14 +226,13 @@ func (b *bot) NotifyDraw() {
 
 	IDs := []int64{b.chatID, opponentID}
 	for i, id := range IDs {
-		enemyName := b.GetUserName(IDs[1-i])
-		enemy := genUserLink(IDs[1-i], enemyName)
+		enemy := GenUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
 		res, _ := b.SendMessage(
 			fmt.Sprint("⚖️ <b>The match is a draw</b> in the battle against ", enemy, "\n"),
 			id,
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
-		b.EditMessageReplyMarkup(echotron.NewMessageID(id, res.Result.ID), genRematchKbd(IDs[1-i], enemyName))
+		b.EditMessageReplyMarkup(echotron.NewMessageID(id, res.Result.ID), genRematchKbd(IDs[1-i]))
 	}
 }
 
@@ -243,18 +248,18 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 	winnerName, looserName := b.GetUserName(winnerID), b.GetUserName(looserID)
 
 	text := fmt.Sprint(
-		"🥇 <b>You win</b> in the battle against ", genUserLink(looserID, looserName), "\n",
+		"🥇 <b>You win</b> in the battle against ", GenUserLink(looserID, looserName), "\n",
 		"<i>Congratulation ", winnerName, " the big spirit of the war is proud of you</i>",
 	)
 	res, _ := b.SendMessage(text, winnerID, &opt)
-	b.EditMessageReplyMarkup(echotron.NewMessageID(winnerID, res.Result.ID), genRematchKbd(looserID, looserName))
+	b.EditMessageReplyMarkup(echotron.NewMessageID(winnerID, res.Result.ID), genRematchKbd(looserID))
 
 	text = fmt.Sprint(
-		"☠ <b>You loose</b> the battle against ", genUserLink(winnerID, winnerName), "\n",
+		"☠ <b>You loose</b> the battle against ", GenUserLink(winnerID, winnerName), "\n",
 		"<i>I hope that the guardian spirit can assist you in the next battle</i>",
 	)
 	res, _ = b.SendMessage(text, looserID, &opt)
-	b.EditMessageReplyMarkup(echotron.NewMessageID(looserID, res.Result.ID), genRematchKbd(winnerID, winnerName))
+	b.EditMessageReplyMarkup(echotron.NewMessageID(looserID, res.Result.ID), genRematchKbd(winnerID))
 }
 
 // Notify the users of the withdrawn of some of the two
@@ -268,13 +273,13 @@ func (b *bot) NotifyCancel() {
 	}
 
 	text := fmt.Sprint(
-		"🏳️ <b>You flee</b> from the battle against ", genUserLink(winnerID, b.GetUserName(winnerID)), "\n",
+		"🏳️ <b>You flee</b> from the battle against ", GenUserLink(winnerID, b.GetUserName(winnerID)), "\n",
 		"<i>The big spirit of the war will not like this behaviour...</i>",
 	)
 	b.SendMessage(text, b.chatID, &opt)
 
 	text = fmt.Sprint(
-		"🏃 <b>Your ", genUserLink(b.chatID, "opponent"), " has withdrawn</b>\n",
+		"🏃 <b>Your ", GenUserLink(b.chatID, "opponent"), " has withdrawn</b>\n",
 		"<i>Probably you are too strong for him or maybe he doesn't like your face...</i>",
 	)
 	b.SendMessage(text, winnerID, &opt)

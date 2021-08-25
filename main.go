@@ -21,7 +21,7 @@ func newBot(chatID int64) echotron.Bot {
 	return &bot{chatID, echotron.NewAPI(TOKEN)}
 }
 
-func (b *bot) handleStart(update *echotron.Update, payload []string) {
+func (b *bot) handleStart(payload []string) {
 	var (
 		opt           = echotron.MessageOptions{ParseMode: echotron.HTML}
 		text, botUser string
@@ -34,8 +34,8 @@ func (b *bot) handleStart(update *echotron.Update, payload []string) {
 		text = fmt.Sprint(
 			"👋 <b>Welcome duelist to ", botUser, "</b> <code>[BETA]</code>\n",
 			"If you are new I suggest you to see how to play using /help\n",
-			"\n",
-			"\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
+			"\nUse me inline or use the command /invite to fight against your friends",
+			"\n\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
 			" I'm also <a href=\"https://github.com/DazFather/DuelBot\">open source</a>",
 		)
 		opt.DisableWebPagePreview = true
@@ -45,7 +45,7 @@ func (b *bot) handleStart(update *echotron.Update, payload []string) {
 			b.handleHelp()
 			return
 		case "joinDuel":
-			b.handleAccept(update, payload[1:])
+			b.handleAccept(-1, payload[1:])
 			return
 		default:
 			text = "¯\\_(ツ)_/¯ Wrong format"
@@ -92,7 +92,7 @@ func (b *bot) handleInvite(update *echotron.Update) {
 
 }
 
-func (b *bot) handleAccept(update *echotron.Update, payload []string) {
+func (b *bot) handleAccept(msgID int, payload []string) {
 	var userID int64
 
 	if len(payload) != 2 {
@@ -117,7 +117,7 @@ func (b *bot) handleAccept(update *echotron.Update, payload []string) {
 		return
 	}
 
-	b.DeleteMessage(b.chatID, extractMessageID(update))
+	b.DeleteMessage(b.chatID, msgID)
 	b.NotifyAcceptDuel(b.chatID, userID)
 }
 
@@ -134,17 +134,6 @@ func (b *bot) handleAction(payload []string) {
 	}
 
 	switch payload[0] {
-	case "ME":
-		DisplayStatus(b.chatID, b.chatID, false)
-
-	case "ENEMY":
-		enemyID, err = GetOpponentID(b.chatID)
-		if err != nil {
-			log.Println("handleAction", "GetOpponentID", err)
-			return
-		}
-		DisplayStatus(b.chatID, enemyID, false)
-
 	case "GUARD", "ATTACK", "DEFEND", "DODGE":
 		// Don't do nothing if is the same action
 		if move, _ := GetPlayerAction(b.chatID); move == payload[0] {
@@ -157,7 +146,7 @@ func (b *bot) handleAction(payload []string) {
 			log.Println("handleAction", "SetPlayerMoves", err)
 			return
 		}
-		DisplayStatus(b.chatID, b.chatID, false)
+		DisplayStatus(b.chatID, false)
 
 		// If enemy is on guard spy the action
 		enemyID, err = GetOpponentID(b.chatID)
@@ -286,9 +275,13 @@ func (b *bot) handleReject(update *echotron.Update, payload []string) {
 		messageID = rawID
 	}
 
-	b.EditMessageText("You delcine this invitation", *extractMessageIDOpt(update), nil)
+	b.EditMessageText(
+		"✖️ <i>You delcine this invitation</i>",
+		*extractMessageIDOpt(update),
+		&echotron.MessageTextOptions{ParseMode: echotron.HTML},
+	)
 
-	guestUser = genUserLink(b.chatID, extractName(update))
+	guestUser = GenUserLink(b.chatID, extractName(update))
 	b.DeleteMessage(inviterID, messageID)
 
 	b.SendMessage(
@@ -305,13 +298,15 @@ func (b *bot) handleRematch(update *echotron.Update, payload []string) {
 		msgID  = extractMessageID(update)
 	)
 
-	if len(payload) != 2 {
+	if len(payload) != 1 {
 		b.SendMessage("Wrong format", b.chatID, nil)
+		fmt.Println("HEYA")
 		return
 	}
 
 	if rawID, err := strconv.Atoi(payload[0]); err != nil {
 		b.SendMessage("Wrong format", b.chatID, nil)
+		fmt.Println("HEYA2")
 		return
 	} else {
 		userID = int64(rawID)
@@ -325,19 +320,58 @@ func (b *bot) handleRematch(update *echotron.Update, payload []string) {
 	}
 
 	b.EditMessageText(
-		"<b>Invitation sent to</b> "+genUserLink(userID, payload[1])+"\n... waiting for a reply ⏳",
+		"<b>Invitation sent</b>\n... waiting for a reply ⏳",
 		echotron.NewMessageID(b.chatID, msgID),
 		&echotron.MessageTextOptions{ParseMode: echotron.HTML},
 	)
 
 	b.SendMessage(
 		fmt.Sprint(
-			"🗡 <b>", genUserLink(b.chatID, extractName(update)), " is challenging you for a rematch</b>",
+			"🗡 <b>", GenUserLink(b.chatID, extractName(update)), " is challenging you for a rematch</b>",
 			"\nWhat are you going to do?",
 		),
 		userID,
 		&opt,
 	)
+}
+
+func (b *bot) handleInviteLink(update *echotron.Update, payload []string) {
+	var (
+		err error
+		res echotron.APIResponseMessage
+		kbd = echotron.InlineKeyboardMarkup{
+			InlineKeyboard: [][]echotron.InlineKeyboardButton{{
+				{Text: "🔂 Refresh", CallbackData: "/invite refresh"},
+			}},
+		}
+	)
+
+	if len(payload) > 1 {
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	}
+
+	if len(payload) == 1 && payload[0] == "refresh" {
+		res, err = b.EditMessageText(
+			"Here is your invitation link: "+b.GenInvitationLink(),
+			*extractMessageIDOpt(update),
+			&echotron.MessageTextOptions{
+				ParseMode:   echotron.HTML,
+				ReplyMarkup: kbd,
+			},
+		)
+
+	}
+	if len(payload) == 0 || err != nil || res.Result == nil {
+		b.SendMessage(
+			"Here is your invitation link: "+b.GenInvitationLink(),
+			b.chatID,
+			&echotron.MessageOptions{
+				ParseMode:   echotron.HTML,
+				BaseOptions: echotron.BaseOptions{ReplyMarkup: kbd},
+			},
+		)
+	}
 }
 
 // Manage the incoming inputs (uptate) from Telegram
@@ -353,13 +387,13 @@ func (b *bot) Update(update *echotron.Update) {
 	switch command {
 	// Outside a duel
 	case "/start":
-		b.handleStart(update, payload)
+		b.handleStart(payload)
 
 	case "/help":
 		b.handleHelp()
 
 	case "/invite":
-		b.SendMessage(b.GenInvitationLink(), b.chatID, nil)
+		b.handleInviteLink(update, payload)
 
 	case "/rematch":
 		b.handleRematch(update, payload)
@@ -368,7 +402,7 @@ func (b *bot) Update(update *echotron.Update) {
 		b.TEMP_handleInvite(payload)
 
 	case "/accept":
-		b.handleAccept(update, payload)
+		b.handleAccept(extractMessageID(update), payload)
 	case "/reject":
 		b.handleReject(update, payload)
 

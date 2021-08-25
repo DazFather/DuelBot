@@ -55,17 +55,22 @@ func extractMessageIDOpt(update *echotron.Update) *echotron.MessageIDOptions {
 	var (
 		message *echotron.Message
 		msgID   echotron.MessageIDOptions
+		userID  int64
 	)
 
 	switch true {
 	case update.Message != nil:
 		message = update.Message
+		userID = message.From.ID
 	case update.EditedMessage != nil:
 		message = update.EditedMessage
+		userID = message.From.ID
 	case update.ChannelPost != nil:
 		message = update.ChannelPost
+		userID = message.SenderChat.ID
 	case update.EditedChannelPost != nil:
 		message = update.EditedChannelPost
+		userID = message.SenderChat.ID
 	case update.InlineQuery != nil:
 		msgID = echotron.NewInlineMessageID(update.InlineQuery.ID)
 		return &msgID
@@ -78,12 +83,13 @@ func extractMessageIDOpt(update *echotron.Update) *echotron.MessageIDOptions {
 			msgID = echotron.NewInlineMessageID(update.CallbackQuery.ID)
 			return &msgID
 		}
+		userID = update.CallbackQuery.From.ID
 	}
 
-	if message == nil || message.SenderChat == nil {
+	if message == nil {
 		return nil
 	}
-	msgID = echotron.NewMessageID(message.SenderChat.ID, message.ID)
+	msgID = echotron.NewMessageID(userID, message.ID)
 	return &msgID
 }
 
@@ -132,7 +138,7 @@ func extractName(update *echotron.Update) (FirstName string) {
 	if user == nil {
 		return "Unknown User"
 	}
-	FirstName = ParseName(user.FirstName)
+	FirstName = parseName(user.FirstName)
 	if FirstName == "" {
 		return "Unnamed User"
 	}
@@ -146,7 +152,14 @@ func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 		menuID int
 		b      = echotron.NewAPI(TOKEN)
 		res    echotron.APIResponseMessage
+		move   string
 	)
+
+	move, err = GetPlayerAction(userID)
+	if err != nil {
+		log.Println("UpdateStatus", "GetPlayerAction", err)
+		return
+	}
 
 	if !newMessage {
 		menuID, err = GetPlayerMenuID(userID)
@@ -157,14 +170,14 @@ func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 		messageID := echotron.NewMessageID(userID, menuID)
 		_, err = b.EditMessageText(text, messageID, &echotron.MessageTextOptions{
 			ParseMode:   echotron.HTML,
-			ReplyMarkup: genActionKbd(),
+			ReplyMarkup: genActionKbd(move),
 		})
 	}
 
 	if newMessage || err != nil {
 		res, err = b.SendMessage(text, userID, &echotron.MessageOptions{
 			ParseMode:   echotron.HTML,
-			BaseOptions: echotron.BaseOptions{ReplyMarkup: genActionKbd()},
+			BaseOptions: echotron.BaseOptions{ReplyMarkup: genActionKbd(move)},
 		})
 		if err != nil || res.Result == nil {
 			log.Println("UpdateStatus", err)
@@ -177,14 +190,15 @@ func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 	return
 }
 
-func ParseName(rawName string) string {
+// Put the escaping sequence on name
+func parseName(rawName string) string {
 	var rx = regexp.MustCompile(`[\*\[\]\(\)\` + "`" + `~>#+\-=|{}.!]`)
 
 	return rx.ReplaceAllString(rawName, "\\$0")
 }
 
 // Vreating an HTML link to the specified user
-func genUserLink(userID int64, name string) string {
+func GenUserLink(userID int64, name string) string {
 	return fmt.Sprint("<a href=\"tg://user?id=", userID, "\">", name, "</a>")
 }
 
@@ -237,7 +251,7 @@ func (b *bot) GetUserName(chatID int64) (name string) {
 	if err != nil || res.Result == nil {
 		return "Unnamed User"
 	}
-	name = ParseName(res.Result.FirstName)
+	name = parseName(res.Result.FirstName)
 	if name == "" {
 		name = "Unnamed User"
 	}
