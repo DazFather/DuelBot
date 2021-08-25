@@ -13,18 +13,78 @@ import (
 
 // Returns the text contained in the given update.
 func extractText(update *echotron.Update) string {
-	if update.Message != nil {
+	switch true {
+	case update.Message != nil:
 		if update.Message.Text != "" {
 			return update.Message.Text
 		}
 		return update.Message.Caption
-	} else if update.EditedMessage != nil {
+	case update.EditedMessage != nil:
 		return update.EditedMessage.Text
-	} else if update.CallbackQuery != nil {
+	case update.ChannelPost != nil:
+		return update.ChannelPost.Text
+	case update.EditedChannelPost != nil:
+		return update.EditedChannelPost.Text
+	case update.CallbackQuery != nil:
 		return update.CallbackQuery.Data
 	}
 
 	return ""
+}
+
+// Get the Message.ID of an update (that is not inline-based)
+func extractMessageID(update *echotron.Update) int {
+	switch true {
+	case update.Message != nil:
+		return update.Message.ID
+	case update.EditedMessage != nil:
+		return update.EditedMessage.ID
+	case update.ChannelPost != nil:
+		return update.ChannelPost.ID
+	case update.EditedChannelPost != nil:
+		return update.EditedChannelPost.ID
+	case update.CallbackQuery != nil && update.CallbackQuery.Message != nil:
+		return update.CallbackQuery.Message.ID
+	}
+
+	return -1
+}
+
+// Generate and return the MessageIDOptions of a given update using the ID and SenderChat
+func extractMessageIDOpt(update *echotron.Update) *echotron.MessageIDOptions {
+	var (
+		message *echotron.Message
+		msgID   echotron.MessageIDOptions
+	)
+
+	switch true {
+	case update.Message != nil:
+		message = update.Message
+	case update.EditedMessage != nil:
+		message = update.EditedMessage
+	case update.ChannelPost != nil:
+		message = update.ChannelPost
+	case update.EditedChannelPost != nil:
+		message = update.EditedChannelPost
+	case update.InlineQuery != nil:
+		msgID = echotron.NewInlineMessageID(update.InlineQuery.ID)
+		return &msgID
+	case update.ChosenInlineResult != nil:
+		msgID = echotron.NewInlineMessageID(update.ChosenInlineResult.ResultID)
+		return &msgID
+	case update.CallbackQuery != nil:
+		message = update.CallbackQuery.Message
+		if message == nil {
+			msgID = echotron.NewInlineMessageID(update.CallbackQuery.ID)
+			return &msgID
+		}
+	}
+
+	if message == nil || message.SenderChat == nil {
+		return nil
+	}
+	msgID = echotron.NewMessageID(message.SenderChat.ID, message.ID)
+	return &msgID
 }
 
 // Return the /command and the payload (other element separated by ' ' or '_' if /start)
@@ -45,6 +105,38 @@ func extractCommand(update *echotron.Update) (command string, payload []string) 
 	} else if command == "/start" && strings.ContainsRune(text[ind+1:], '_') {
 		payload = strings.Split(text[ind+1:], "_")
 	}
+	return
+}
+
+// Return the parsed FirstName of the user who sent the message
+func extractName(update *echotron.Update) (FirstName string) {
+	var user *echotron.User
+
+	switch true {
+	case update.Message != nil:
+		user = update.Message.From
+	case update.EditedMessage != nil:
+		user = update.EditedMessage.From
+	case update.ChannelPost != nil:
+		user = update.ChannelPost.From
+	case update.EditedChannelPost != nil:
+		user = update.EditedChannelPost.From
+	case update.InlineQuery != nil:
+		user = update.InlineQuery.From
+	case update.ChosenInlineResult != nil:
+		user = update.ChosenInlineResult.From
+	case update.CallbackQuery != nil:
+		user = update.CallbackQuery.From
+	}
+
+	if user == nil {
+		return "Unknown User"
+	}
+	FirstName = ParseName(user.FirstName)
+	if FirstName == "" {
+		return "Unnamed User"
+	}
+
 	return
 }
 
@@ -140,14 +232,14 @@ func LoadToken() (token string, err error) {
 }
 
 // Get the name of a player
-func (b *bot) GetPlayerName(chatID int64) (name string) {
+func (b *bot) GetUserName(chatID int64) (name string) {
 	res, err := b.GetChat(chatID)
 	if err != nil || res.Result == nil {
-		return "Unknown User"
+		return "Unnamed User"
 	}
 	name = ParseName(res.Result.FirstName)
 	if name == "" {
-		name = "Unknown User"
+		name = "Unnamed User"
 	}
 
 	return

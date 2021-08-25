@@ -101,6 +101,7 @@ func (b *bot) SpyAction(toUserID, opponentID int64, move string) {
 	UpdateStatus(toUserID, text, false)
 }
 
+// Notify the result of a perform
 func (b *bot) NotifyBattleReport(report BattleReport) {
 	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
 
@@ -137,32 +138,6 @@ func (b *bot) NotifyBattleReport(report BattleReport) {
 			DisplayStatus(r.UserID, r.UserID, true)
 		}
 	}
-}
-
-// Notify the result of a perform
-func NotifyResult(userID int64, success bool, move, enemyMoves, infos string) {
-	var descr string
-
-	descr = fmt.Sprint(
-		"<b>You %s ", strings.ToLower(Prettfy(move, false, 1)), "</b>\n",
-		"<i>%s the enemy %s</i>\n", infos,
-	)
-
-	switch move {
-	case "STUNNED", "EXAUSTED":
-		descr = fmt.Sprintf(descr, "got", "meanwhile", strings.ToLower(enemyMoves))
-	default:
-		if success {
-			enemyMoves = "was " + strings.ToLower(Prettfy(enemyMoves, true, 0))
-			descr = fmt.Sprintf(descr, "successfully", "meanwhile", enemyMoves)
-		} else {
-			descr = fmt.Sprintf(descr, "tried to", "but", strings.ToLower(enemyMoves))
-		}
-	}
-
-	b := echotron.NewAPI(TOKEN)
-	b.SendMessage(descr, userID, &echotron.MessageOptions{ParseMode: echotron.HTML})
-	DisplayStatus(userID, userID, true)
 }
 
 // Display the current status of a user
@@ -209,12 +184,24 @@ func genActionKbd() (markup echotron.InlineKeyboardMarkup) {
 	return
 }
 
+// Generate the inline keyboard with all the actions
+func genRematchKbd(opponentID int64, opponentName string) (markup *echotron.MessageReplyMarkup) {
+	var kbd echotron.InlineKeyboardMarkup
+
+	kbd.InlineKeyboard = [][]echotron.InlineKeyboardButton{{{
+		Text:         "🔄 Rematch",
+		CallbackData: fmt.Sprintf("/rematch %d %s", opponentID, opponentName),
+	}}}
+
+	return &echotron.MessageReplyMarkup{kbd}
+}
+
 // Notify the users that the duel is starting
 func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 	var IDs = [2]int64{firstID, secondID}
 
 	for i, currentID := range IDs {
-		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1-i]))
+		user := genUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
 		b.SendMessage(
 			fmt.Sprint("Duel against ", user, " is now starting 🏁"),
 			currentID,
@@ -233,12 +220,14 @@ func (b *bot) NotifyDraw() {
 
 	IDs := []int64{b.chatID, opponentID}
 	for i, id := range IDs {
-		user := genUserLink(IDs[1-i], b.GetPlayerName(IDs[1-i]))
-		b.SendMessage(
-			fmt.Sprint("⚖️ <b>The match is a draw</b> in the battle against ", user, "\n"),
+		enemyName := b.GetUserName(IDs[1-i])
+		enemy := genUserLink(IDs[1-i], enemyName)
+		res, _ := b.SendMessage(
+			fmt.Sprint("⚖️ <b>The match is a draw</b> in the battle against ", enemy, "\n"),
 			id,
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
+		b.EditMessageReplyMarkup(echotron.NewMessageID(id, res.Result.ID), genRematchKbd(IDs[1-i], enemyName))
 	}
 }
 
@@ -251,19 +240,21 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 		log.Println("NotifyEndDuel", "GetOpponentID", err)
 		return
 	}
-	winnerName, looserName := b.GetPlayerName(winnerID), b.GetPlayerName(looserID)
+	winnerName, looserName := b.GetUserName(winnerID), b.GetUserName(looserID)
 
 	text := fmt.Sprint(
 		"🥇 <b>You win</b> in the battle against ", genUserLink(looserID, looserName), "\n",
 		"<i>Congratulation ", winnerName, " the big spirit of the war is proud of you</i>",
 	)
-	b.SendMessage(text, winnerID, &opt)
+	res, _ := b.SendMessage(text, winnerID, &opt)
+	b.EditMessageReplyMarkup(echotron.NewMessageID(winnerID, res.Result.ID), genRematchKbd(looserID, looserName))
 
 	text = fmt.Sprint(
 		"☠ <b>You loose</b> the battle against ", genUserLink(winnerID, winnerName), "\n",
 		"<i>I hope that the guardian spirit can assist you in the next battle</i>",
 	)
-	b.SendMessage(text, looserID, &opt)
+	res, _ = b.SendMessage(text, looserID, &opt)
+	b.EditMessageReplyMarkup(echotron.NewMessageID(looserID, res.Result.ID), genRematchKbd(winnerID, winnerName))
 }
 
 // Notify the users of the withdrawn of some of the two
@@ -277,7 +268,7 @@ func (b *bot) NotifyCancel() {
 	}
 
 	text := fmt.Sprint(
-		"🏳️ <b>You flee</b> from the battle against ", genUserLink(winnerID, b.GetPlayerName(winnerID)), "\n",
+		"🏳️ <b>You flee</b> from the battle against ", genUserLink(winnerID, b.GetUserName(winnerID)), "\n",
 		"<i>The big spirit of the war will not like this behaviour...</i>",
 	)
 	b.SendMessage(text, b.chatID, &opt)
