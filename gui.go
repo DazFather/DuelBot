@@ -9,7 +9,7 @@ import (
 )
 
 // Make the actions (ME, ATTACK, GUARD ecc.. ) more pretty
-func Prettfy(rawAction string, conditional bool, emoji int8) string {
+func Prettfy(rawAction string, conditional bool, emoji int8) (pretty string) {
 	var selectEmoji = map[string]string{
 		"ME":       "👤",
 		"ENEMY":    "👤",
@@ -19,12 +19,16 @@ func Prettfy(rawAction string, conditional bool, emoji int8) string {
 		"DODGE":    "➰",
 		"STUNNED":  "💫",
 		"EXAUSTED": "🥵",
-		"HELPLESS": "🆘",
+		"HELPLESS": "😵",
 	}
-	pretty := fmt.Sprint(string(rawAction[0]), strings.ToLower(rawAction[1:]))
 
-	if rawAction == "GUARD" {
-		pretty = "On " + pretty
+	switch rawAction {
+	case "HELPLESS":
+		pretty = "Unable to fight"
+	case "GUARD":
+		pretty = "On Guard"
+	default:
+		pretty = fmt.Sprint(string(rawAction[0]), strings.ToLower(rawAction[1:]))
 	}
 
 	if conditional {
@@ -113,18 +117,19 @@ func (b *bot) NotifyBattleReport(report BattleReport) {
 			msg = "<b>You got " + Prettfy(*r.GainEffect, false, 1) + "</b>"
 		}
 
-		if r.Performed != "HELPLESS" {
-			msg += "\nYou %s" + Prettfy(r.Performed, false, 1) + "%s"
+		msg += "\nYou %s" + Prettfy(r.Performed, false, 1) + "%s"
+		switch r.Performed {
+		case "HELPLESS", "STUNNED", "EXAUSTED":
+			msg = fmt.Sprintf(msg, "<b>were ", "</b>")
+		default:
 			if r.Success {
-				msg = fmt.Sprintf(msg, "", " successfully\nmeanwhile")
+				msg = fmt.Sprintf(msg, "<b>", " successfully</b>\nmeanwhile")
 			} else {
-				msg = fmt.Sprintf(msg, "tried to ", " but...")
+				msg = fmt.Sprintf(msg, "<b>tried to ", "</b> but...")
 			}
 		}
 
-		if enemy.Performed != "HELPLESS" {
-			msg += "\nEnemy was " + Prettfy(enemy.Performed, true, 1)
-		}
+		msg += "\nEnemy <b>was " + Prettfy(enemy.Performed, true, 1) + "</b>"
 
 		if enemy.GainEffect != nil {
 			msg += "\n<b>Enemy got " + Prettfy(*enemy.GainEffect, false, 1) + "</b>"

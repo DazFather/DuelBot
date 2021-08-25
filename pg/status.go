@@ -82,6 +82,7 @@ func (c *Creature) perform(enemy Creature) (response InvokeRes) {
 		response = c.dodge(enemy)
 	case GUARD, HELPLESS:
 		response = c.sleep(enemy)
+		// I'm not sure if I should delete this or not...
 		if len(c.effects) > 0 {
 			if c.IsOnStatus(STUNNED) {
 				response.Performed = STUNNED
