@@ -201,7 +201,7 @@ func genRematchKbd(opponentID int64) (markup *echotron.MessageReplyMarkup) {
 
 	kbd.InlineKeyboard = [][]echotron.InlineKeyboardButton{{{
 		Text:         "🔄 Rematch",
-		CallbackData: fmt.Sprint("/rematch ", opponentID),
+		CallbackData: fmt.Sprint("/inviteid ", opponentID, " rematch"),
 	}}}
 
 	return &echotron.MessageReplyMarkup{kbd}
