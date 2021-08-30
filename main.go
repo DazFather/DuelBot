@@ -57,24 +57,21 @@ func (b *bot) handleStart(update *echotron.Update, payload []string) {
 			return
 
 		case "invitationInfo":
-			b.EditMessageText(
+			b.DisplayMessage(
 				fmt.Sprint(
 					"💬 <b>Invite other users to a duel</b>",
 					"\nJust type <code>", username, "</code> in any chat to <i>auto",
-					"magiacally✨</i> generate an invitation message to send in other",
-					" chat\nIf you prefer to create your own instead you can generate",
+					"magiacally✨</i> generate an invitation message",
+					"\nIf you prefer to create your own instead you can generate",
 					" a new invitation link using the button below",
 				),
-				*extractMessageIDOpt(update),
-				&echotron.MessageTextOptions{
-					ParseMode:             echotron.HTML,
-					DisableWebPagePreview: true,
-					ReplyMarkup: echotron.InlineKeyboardMarkup{
-						InlineKeyboard: [][]echotron.InlineKeyboardButton{
-							{{Text: "🔗 New invite link", CallbackData: "/invite refresh"}},
-							{{Text: "✨ Inline invitation", SwitchInlineQuery: "DuellingRobot"}},
-							{{Text: "🔙 Main menu", CallbackData: "/start"}},
-						},
+				extractMessageIDOpt(update),
+				false,
+				&echotron.InlineKeyboardMarkup{
+					InlineKeyboard: [][]echotron.InlineKeyboardButton{
+						{{Text: "🔗 New invite link", CallbackData: "/invite refresh"}},
+						{{Text: "✨ Inline invitation", SwitchInlineQuery: "DuellingRobot"}},
+						{{Text: "🔙 Main menu", CallbackData: "/start"}},
 					},
 				},
 			)
@@ -193,8 +190,9 @@ func (b *bot) handleInviteLink(update *echotron.Update, payload []string) {
 		" your idea you can refresh for a new one so the old one will stop working.\n",
 		"\n ", b.GenInvitationLink(), "\n",
 		"\n⚠️<i>Refreshing, opening again this section or using the bot inline ",
-		"will generate a new invite that will make the previous invalid. ",
-		"Because I care about privacy</i>",
+		"will generate a new invite that will make the previous invalid.</i> ",
+		"<a href=\"https://telegra.ph/DuelBot---I-care-about-Privacy-08-26\">",
+		"Because I care about privacy</a>",
 	)
 
 	if len(payload) == 1 && payload[0] == "refresh" {

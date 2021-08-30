@@ -29,8 +29,6 @@ func (c Creature) IsDead() bool {
 func PerformAction(c1, c2 *Creature) (winner int8, responses [2]InvokeRes) {
 	responses[0] = c1.perform(*c2)
 	responses[1] = c2.perform(*c1)
-	responses[0].update(responses[1])
-	responses[1].update(responses[0])
 
 	c1.resetAction()
 	c2.resetAction()

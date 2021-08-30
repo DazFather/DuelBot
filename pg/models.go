@@ -26,7 +26,6 @@ type InvokeRes struct {
 	LifeOffset    int
 	StaminaOffset int
 	GainEffect    Status
-	Success       bool
 	Performed     Status
 }
 

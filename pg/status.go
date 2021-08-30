@@ -99,22 +99,6 @@ func (c *Creature) perform(enemy Creature) (response InvokeRes) {
 	return
 }
 
-func (res *InvokeRes) update(enemyRessponse InvokeRes) {
-	if isEffect(res.Performed) {
-		res.Success = false
-		return
-	}
-
-	switch res.Performed {
-	case ATTACK:
-		res.Success = enemyRessponse.LifeOffset < 0
-	case DEFEND:
-		res.Success = (enemyRessponse.GainEffect != HELPLESS || res.LifeOffset < 0)
-	case DODGE:
-		res.Success = res.LifeOffset == 0
-	}
-}
-
 func (attacking *Creature) attack(enemy Creature) (response InvokeRes) {
 	attacking.useEnergy(&response)
 

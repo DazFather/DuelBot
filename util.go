@@ -259,6 +259,7 @@ func (b *bot) GetUserName(chatID int64) (name string) {
 	return
 }
 
+// Try to edit a message if it can't or IDO == nil send a new one
 func (b *bot) DisplayMessage(text string, IDO *echotron.MessageIDOptions, linkPreview bool, kbd *echotron.InlineKeyboardMarkup) (res echotron.APIResponseMessage, err error) {
 	if IDO != nil {
 		res, err = b.EditMessageText(text, *IDO, &echotron.MessageTextOptions{

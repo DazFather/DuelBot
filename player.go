@@ -13,6 +13,21 @@ type Player struct {
 	enemyID int64
 }
 
+type BattleReport struct {
+	EndDuel     bool
+	WinnerID    *int64
+	PlayersInfo []PlayerReport
+}
+
+type PlayerReport struct {
+	UserID     int64
+	LifeOff    int
+	StaminaOff int
+	GainEffect *string
+	Performed  string
+	Success    bool
+}
+
 var (
 	players = make(map[int64]*Player, 0)
 
@@ -190,21 +205,22 @@ func SetPlayerMoves(ownerID int64, move string) (time.Duration, error) {
 	return players[ownerID].stats.SetAction(action)
 }
 
-type BattleReport struct {
-	EndDuel     bool
-	WinnerID    *int64
-	PlayersInfo []PlayerReport
+// Check if an action was executed successfully
+func isSuccessfull(response, enemyRessponse pg.InvokeRes) bool {
+	switch response.Performed {
+	case pg.ATTACK:
+		return enemyRessponse.LifeOffset < 0
+	case pg.DEFEND:
+		return enemyRessponse.GainEffect != pg.HELPLESS || response.LifeOffset < 0
+	case pg.DODGE:
+		return response.LifeOffset == 0
+	}
+
+	// in case of pg.GUARD, pg.HELPLESS, pg.STUNNED, pg.EXAUSTED:
+	return false
 }
 
-type PlayerReport struct {
-	UserID     int64
-	LifeOff    int
-	StaminaOff int
-	GainEffect *string
-	Performed  string
-	Success    bool
-}
-
+// Execute the action of a player against his opponent and vice versa
 func PlayersPerformMove(ownerID int64) (report BattleReport, err error) {
 	var opponentID int64
 
@@ -221,10 +237,10 @@ func PlayersPerformMove(ownerID int64) (report BattleReport, err error) {
 			LifeOff:    res.LifeOffset,
 			StaminaOff: res.StaminaOffset,
 			Performed:  toString[res.Performed],
-			Success:    res.Success,
+			Success:    isSuccessfull(res, responses[1-i]),
 		})
 		// Check if during the battle a creature got a new effect
-		if res.Performed == pg.HELPLESS && res.GainEffect != pg.HELPLESS {
+		if res.GainEffect != pg.HELPLESS {
 			val := toString[res.GainEffect]
 			report.PlayersInfo[i].GainEffect = &val
 		}
