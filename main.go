@@ -23,32 +23,61 @@ func newBot(chatID int64) echotron.Bot {
 }
 
 // Handle the start message and redirect links to their helper funcions
-func (b *bot) handleStart(payload []string) {
-	var botUser string
+func (b *bot) handleStart(update *echotron.Update, payload []string) {
+	var username string
+	if res, err := b.GetMe(); err == nil && res.Result != nil {
+		username = "@" + res.Result.Username
+	} else {
+		return
+	}
 
 	switch len(payload) {
 	case 0:
-		if res, err := b.GetMe(); err == nil && res.Result != nil {
-			botUser = "@" + res.Result.Username
-		}
-		b.SendMessage(
-			fmt.Sprint(
-				"👋 <b>Welcome duelist to ", botUser, "</b> <code>[BETA]</code>\n",
-				"If you are new I suggest you to see how to play using /help\n",
-				"\nUse me inline or use the command /invite to fight against your friends",
-				"\n\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
-				" I'm also <a href=\"https://github.com/DazFather/DuelBot\">open source</a>",
-			),
-			b.chatID,
-			&echotron.MessageOptions{
-				ParseMode:             echotron.HTML,
-				DisableWebPagePreview: true,
-			},
+		text := fmt.Sprint(
+			"👋 <b>Welcome duelist to ", username, "</b> <code>[BETA]</code>\n",
+			"If you are new I suggest you to see how to play using /help\n",
+			"\nUse me inline or use the command /invite to fight against your friends",
+			"\n\n💟 Created with love by @DazFather in Go using <a href=\"https://github.com/NicoNex/echotron\">echotron</a>.",
+			" I'm also <a href=\"https://github.com/DazFather/DuelBot\">open source</a>",
 		)
+
+		kbd := echotron.InlineKeyboardMarkup{
+			InlineKeyboard: [][]echotron.InlineKeyboardButton{{
+				{Text: "❓ How to play", CallbackData: "/help"},
+				{Text: "🕹 Play with others", CallbackData: "/start invitationInfo"},
+			}},
+		}
+
+		b.DisplayMessage(text, extractMessageIDOpt(update), false, &kbd)
 		return
 	case 1:
-		if payload[0] == "noob" {
-			b.handleHelp()
+		switch payload[0] {
+		case "noob":
+			b.handleHelp(update, []string{"0"})
+			return
+
+		case "invitationInfo":
+			b.EditMessageText(
+				fmt.Sprint(
+					"💬 <b>Invite other users to a duel</b>",
+					"\nJust type <code>", username, "</code> in any chat to <i>auto",
+					"magiacally✨</i> generate an invitation message to send in other",
+					" chat\nIf you prefer to create your own instead you can generate",
+					" a new invitation link using the button below",
+				),
+				*extractMessageIDOpt(update),
+				&echotron.MessageTextOptions{
+					ParseMode:             echotron.HTML,
+					DisableWebPagePreview: true,
+					ReplyMarkup: echotron.InlineKeyboardMarkup{
+						InlineKeyboard: [][]echotron.InlineKeyboardButton{
+							{{Text: "🔗 New invite link", CallbackData: "/invite refresh"}},
+							{{Text: "✨ Inline invitation", SwitchInlineQuery: "DuellingRobot"}},
+							{{Text: "🔙 Main menu", CallbackData: "/start"}},
+						},
+					},
+				},
+			)
 			return
 		}
 	case 3:
@@ -61,8 +90,51 @@ func (b *bot) handleStart(payload []string) {
 }
 
 // Handle the tutorial
-func (b *bot) handleHelp() {
-	b.SendMessage("😈 No one is gonna help ya", b.chatID, nil)
+func (b *bot) handleHelp(update *echotron.Update, payload []string) {
+	var (
+		prev, next echotron.InlineKeyboardButton
+		text       string
+	)
+
+	if len(payload) == 0 {
+		payload = append(payload, "0")
+	} else if len(payload) != 1 {
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	}
+
+	switch payload[0] {
+	case "close":
+		b.DeleteMessage(b.chatID, extractMessageID(update))
+		return
+	case "0":
+		prev.Text, prev.CallbackData = "🔙 Main menu", "/start"
+		next.Text, next.CallbackData = "Next ⏭", "/help 1"
+		text = "No one"
+
+	case "1":
+		prev.Text, prev.CallbackData = "⏮ Prev.", "/help 0"
+		next.Text, next.CallbackData = "Next ⏭", "/help 2"
+		text = "is gonna"
+
+	case "2":
+		prev.Text, prev.CallbackData = "⏮ Prev.", "/help 1"
+		next.Text, next.CallbackData = "Play 🕹", "/start invitationInfo"
+		text = "help ya"
+
+	default:
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	}
+
+	kbd := echotron.InlineKeyboardMarkup{
+		InlineKeyboard: [][]echotron.InlineKeyboardButton{
+			{prev, next},
+			{{Text: "❌ Close", CallbackData: "/help close"}},
+		},
+	}
+
+	b.DisplayMessage(text, extractMessageIDOpt(update), false, &kbd)
 }
 
 // Handle the inline invitation
@@ -102,39 +174,39 @@ func (b *bot) handleInviteInline(update *echotron.Update) {
 
 // Handle the request of a new invite link
 func (b *bot) handleInviteLink(update *echotron.Update, payload []string) {
-	var (
-		err error
-		res echotron.APIResponseMessage
-		kbd = echotron.InlineKeyboardMarkup{
-			InlineKeyboard: [][]echotron.InlineKeyboardButton{{
-				{Text: "🔂 Refresh", CallbackData: "/invite refresh"},
-			}},
-		}
-	)
+	var kbd = echotron.InlineKeyboardMarkup{
+		InlineKeyboard: [][]echotron.InlineKeyboardButton{
+			{{Text: "🔂 Refresh", CallbackData: "/invite refresh"}},
+			{{Text: "🔙 Go Back", CallbackData: "/start invitationInfo"}},
+		},
+	}
 
 	if len(payload) > 1 {
 		b.SendMessage("Wrong format", b.chatID, nil)
 		return
 	}
 
-	if len(payload) == 1 && payload[0] == "refresh" {
-		res, err = b.EditMessageText(
-			"Here is your invitation link: "+b.GenInvitationLink(),
-			*extractMessageIDOpt(update),
-			&echotron.MessageTextOptions{
-				ParseMode:   echotron.HTML,
-				ReplyMarkup: kbd,
-			},
-		)
+	text := fmt.Sprint(
+		"🔗 <b>Invitation link</b>",
+		"\nThis is your invitation link, you can send it to your friends so when",
+		" one of them click on it a duel will start against him. If you change",
+		" your idea you can refresh for a new one so the old one will stop working.\n",
+		"\n ", b.GenInvitationLink(), "\n",
+		"\n⚠️<i>Refreshing, opening again this section or using the bot inline ",
+		"will generate a new invite that will make the previous invalid. ",
+		"Because I care about privacy</i>",
+	)
 
-	}
-	if len(payload) == 0 || err != nil || res.Result == nil {
+	if len(payload) == 1 && payload[0] == "refresh" {
+		b.DisplayMessage(text, extractMessageIDOpt(update), false, &kbd)
+	} else {
 		b.SendMessage(
-			"Here is your invitation link: "+b.GenInvitationLink(),
+			text,
 			b.chatID,
 			&echotron.MessageOptions{
-				ParseMode:   echotron.HTML,
-				BaseOptions: echotron.BaseOptions{ReplyMarkup: kbd},
+				ParseMode:             echotron.HTML,
+				BaseOptions:           echotron.BaseOptions{ReplyMarkup: kbd},
+				DisableWebPagePreview: true,
 			},
 		)
 	}
@@ -372,10 +444,10 @@ func (b *bot) Update(update *echotron.Update) {
 	switch command {
 	// Outside a duel
 	case "/start":
-		b.handleStart(payload)
+		b.handleStart(update, payload)
 
 	case "/help":
-		b.handleHelp()
+		b.handleHelp(update, payload)
 
 	case "/invite":
 		b.handleInviteLink(update, payload)

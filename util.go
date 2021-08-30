@@ -258,3 +258,21 @@ func (b *bot) GetUserName(chatID int64) (name string) {
 
 	return
 }
+
+func (b *bot) DisplayMessage(text string, IDO *echotron.MessageIDOptions, linkPreview bool, kbd *echotron.InlineKeyboardMarkup) (res echotron.APIResponseMessage, err error) {
+	if IDO != nil {
+		res, err = b.EditMessageText(text, *IDO, &echotron.MessageTextOptions{
+			ParseMode:             echotron.HTML,
+			DisableWebPagePreview: !linkPreview,
+			ReplyMarkup:           *kbd,
+		})
+	}
+	if err != nil || res.Result == nil {
+		res, err = b.SendMessage(text, b.chatID, &echotron.MessageOptions{
+			ParseMode:             echotron.HTML,
+			DisableWebPagePreview: !linkPreview,
+			BaseOptions:           echotron.BaseOptions{ReplyMarkup: *kbd},
+		})
+	}
+	return
+}
