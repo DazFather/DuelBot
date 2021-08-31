@@ -386,79 +386,56 @@ func (b *bot) handleAction(payload []string) {
 		err      error
 	)
 
-	if !IsPlayerBusy(b.chatID) {
+	if len(payload) != 1 {
+		b.SendMessage("Wrong format", b.chatID, nil)
+		return
+	}
+
+	// Grab enemyID
+	enemyID, err = GetOpponentID(b.chatID)
+	if err != nil {
 		b.SendMessage("Calm down warrior... you are not in a fight anymore", b.chatID, nil)
 		return
 	}
 
-	switch payload[0] {
-	case "GUARD", "ATTACK", "DEFEND", "DODGE":
-		// Don't do nothing if is the same action
-		if move, _ := GetPlayerAction(b.chatID); move == payload[0] {
-			return
-		}
-
-		// Set the player moves and update status
-		duration, err = SetPlayerMoves(b.chatID, payload[0])
-		if err != nil {
-			log.Println("handleAction", "SetPlayerMoves", err)
-			return
-		}
-		DisplayStatus(b.chatID, false)
-
-		// If enemy is on guard spy the action
-		enemyID, err = GetOpponentID(b.chatID)
-		if err != nil {
-			log.Println("handleAction", "GetOpponentID", err)
-			return
-		}
-
-		if onGurad, _ := IsPlayerOnGuard(enemyID); onGurad {
-			b.SpyAction(enemyID, b.chatID, payload[0])
-		}
-
-		// Loop looking for a change in the enemy status
-		start := time.Now()
-		for time.Since(start).Milliseconds() < duration.Milliseconds() {
-			// if enemy is ready stop the loop
-			if ready, err := IsPlayerReady(enemyID); err != nil {
-				log.Println("handleAction", "IsPlayerReady", err)
-				return
-			} else if ready {
-				break
-			}
-
-			time.Sleep(time.Duration(500) * time.Millisecond)
-			// if the user change action quit this process
-			if move, _ := GetPlayerAction(b.chatID); move != payload[0] {
-				return
-			}
-		}
-
-		// Perform the action between players and his opponent
-		report, err := PlayersPerformMove(b.chatID)
-		if err != nil {
-			log.Println("handleAction", "PlayersPerformMove", err)
-			return
-		}
-
-		// Notify users
-		b.NotifyBattleReport(report)
-		if !report.EndDuel {
-			return
-		}
-		if report.WinnerID == nil {
-			b.NotifyDraw()
-		} else {
-			b.NotifyEndDuel(*report.WinnerID)
-		}
-
-		// End duel (if duel ended)
-		EndDuel(b.chatID)
-
-	default:
-		b.SendMessage("¯\\_(ツ)_/¯", b.chatID, nil)
+	// Set the player moves and update status
+	duration, err = SetPlayerMoves(b.chatID, payload[0])
+	if err != nil {
+		log.Println("handleAction", "SetPlayerMoves", err)
+		return
 	}
+	DisplayStatus(b.chatID, false)
+
+	// If enemy is on guard spy the action
+	if onGurad, _ := IsPlayerOnGuard(enemyID); onGurad {
+		b.SpyAction(enemyID, b.chatID, payload[0])
+	}
+
+	// If action does not require any duration (already done) just quit
+	if duration == time.Duration(0) {
+		return
+	}
+
+	// Perform the action between players and his opponent
+	report, err := PlayersPerformMove(b.chatID, enemyID)
+	if err != nil {
+		log.Println("handleAction", "PlayersPerformMove", err)
+		return
+	}
+
+	// Notify users
+	b.NotifyBattleReport(report)
+	if !report.EndDuel {
+		return
+	}
+	if report.WinnerID == nil {
+		b.NotifyDraw(report.PlayersInfo[0].UserID, report.PlayersInfo[1].UserID)
+	} else {
+		b.NotifyEndDuel(*report.WinnerID)
+	}
+
+	// End duel (if duel ended)
+	EndDuel(b.chatID)
 }
 
 // Handle the exit from a duel

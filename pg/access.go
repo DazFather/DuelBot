@@ -78,9 +78,10 @@ func (c Creature) GetInfo() (life int, agility, maxStamina, damage uint) {
 	return
 }
 
-// Get the creature setted action and effects
-func (c Creature) GetStatus() (action Status, effects []Status) {
+// Get the creature setted action, duration (of the action) and effects
+func (c Creature) GetStatus() (action Status, duration time.Duration, effects []Status) {
 	action = c.action
+	duration = c.duration
 	for _, eff := range c.effects {
 		effects = append(effects, eff.symptom)
 	}
