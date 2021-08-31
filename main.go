@@ -144,7 +144,7 @@ func (b *bot) handleInviteInline(update *echotron.Update) {
 		update.InlineQuery.ID,
 		[]echotron.InlineQueryResult{
 			&echotron.InlineQueryResultArticle{
-				Type:        echotron.ARTICLE,
+				Type:        echotron.INLINE_ARTICLE,
 				ID:          string(b.chatID),
 				Title:       "Engage a duel",
 				Description: "Invite this user to a duel",
