@@ -222,14 +222,10 @@ func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 	}
 }
 
-func (b *bot) NotifyDraw() {
-	opponentID, err := GetOpponentID(b.chatID)
-	if err != nil {
-		log.Println("GetOpponentID", err)
-		return
-	}
+// Notify the users of the end of a match by draw
+func (b *bot) NotifyDraw(player1ID, player2ID int64) {
+	var IDs = []int64{player1ID, player2ID}
 
-	IDs := []int64{b.chatID, opponentID}
 	for i, id := range IDs {
 		enemy := GenUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
 		res, _ := b.SendMessage(
@@ -241,7 +237,7 @@ func (b *bot) NotifyDraw() {
 	}
 }
 
-// Notify the users of the end of a match
+// Notify the users of the win / lost of a match
 func (b *bot) NotifyEndDuel(winnerID int64) {
 	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
 
@@ -267,7 +263,7 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 	b.EditMessageReplyMarkup(echotron.NewMessageID(looserID, res.Result.ID), genRematchKbd(winnerID))
 }
 
-// Notify the users of the withdrawn of some of the two
+// Notify the users of the withdrawn of one of the two
 func (b *bot) NotifyCancel() {
 	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
 

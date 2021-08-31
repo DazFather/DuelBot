@@ -23,16 +23,16 @@ const (
 
 // Response after two creature fight each other
 type InvokeRes struct {
-	LifeOffset    int
-	StaminaOffset int
-	GainEffect    Status
-	Performed     Status
+	LifeOffset    int    // Difference of health points
+	StaminaOffset int    // Difference of stamina points
+	GainEffect    Status // If creature got a new effect (default: HELPLESS)
+	Performed     Status // Performed action (default: HELPLESS)
 }
 
 // Effect
 type effect struct {
-	symptom Status
-	turns   int8
+	symptom Status // type of effect
+	turns   int8   // how many "turns" will last
 }
 
 // Creature

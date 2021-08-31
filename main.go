@@ -60,17 +60,17 @@ func (b *bot) handleStart(update *echotron.Update, payload []string) {
 			b.DisplayMessage(
 				fmt.Sprint(
 					"💬 <b>Invite other users to a duel</b>",
-					"\nJust type <code>", username, "</code> in any chat to <i>auto",
+					"\nTap on \"Inline invitation\" or simply type <code>", username, "</code> in any chat to <i>auto",
 					"magiacally✨</i> generate an invitation message",
-					"\nIf you prefer to create your own instead you can generate",
+					"\nIf you prefer to create your own instead, you can generate",
 					" a new invitation link using the button below",
 				),
 				extractMessageIDOpt(update),
 				false,
 				&echotron.InlineKeyboardMarkup{
 					InlineKeyboard: [][]echotron.InlineKeyboardButton{
-						{{Text: "🔗 New invite link", CallbackData: "/invite refresh"}},
 						{{Text: "✨ Inline invitation", SwitchInlineQuery: "DuellingRobot"}},
+						{{Text: "🔗 Invite link", CallbackData: "/invite refresh"}},
 						{{Text: "🔙 Main menu", CallbackData: "/start"}},
 					},
 				},
@@ -107,17 +107,59 @@ func (b *bot) handleHelp(update *echotron.Update, payload []string) {
 	case "0":
 		prev.Text, prev.CallbackData = "🔙 Main menu", "/start"
 		next.Text, next.CallbackData = "Next ⏭", "/help 1"
-		text = "No one"
+		text = fmt.Sprint(
+			"<b>What is DuelBot❓</b>\n",
+			"DuelBot is a Telegram bot where you can fight your friends in real-time.\n",
+			"It's currently under development by ", GenUserLink(169090723, "@DazFather"),
+			" and it's still on beta so it might be pretty unstable and things are goning to",
+			" change in future. Also it's <a href=\"https://github.com/DazFather/DuelBot\">",
+			"open source</a>, so feel free to contribute.\n",
+			"\nUse the buttons below to navigate into the help section. Tap on \"Next ⏭\"",
+			" if you want to know more about how the duelling mechanics works",
+		)
 
 	case "1":
 		prev.Text, prev.CallbackData = "⏮ Prev.", "/help 0"
 		next.Text, next.CallbackData = "Next ⏭", "/help 2"
-		text = "is gonna"
+		text = fmt.Sprint(
+			"<b>How to play - Stats 🧮</b>\n",
+			"Every player have two main stats:\n",
+			"❤️ <b>health</b> - that start at 20 and it reduce every time you recive",
+			" a damage. If it reach 0 you loose. Currently there is no way to heal\n",
+			"⚡ <b>stamina bar</b> - that start at 6 and it cap at 10. It also reduce",
+			" itself when you make an action that require energy like <i>dodging</i>",
+			" or <i>attacking</i> and it influence the speed of execution of these, ",
+			"so more stamina you got, faster it is. If it reach 0 you become <i>exausted</i>",
+			" and will not be able to move untill the opponent do something.\nYou can",
+			"gain some stamina back by <i>defending</i>\n",
+			"\nThere is also <b>damage</b> (\"⚔\") that rapresent how much damage ",
+			"that you can deal to an enemy. It's value is always 5 but if the enemy ",
+			"is <i>attacking</i>, it will recive just 2. ",
+			"(half of the damage of the opponent rounded down)\n",
+			"\nEvery time you clash against the opponent you recive a report ",
+			"where is how your stats modified and the damage you dealt",
+			"\n\n⚠ <i>This bot is still on beta so things can change in future</i>",
+		)
 
 	case "2":
 		prev.Text, prev.CallbackData = "⏮ Prev.", "/help 1"
 		next.Text, next.CallbackData = "Play 🕹", "/start invitationInfo"
-		text = "help ya"
+		text = fmt.Sprint(
+			"<b>How to play - Actions 💪</b>\n",
+			"There are four actions you can set yourself douring a duel:\n",
+			"👁‍🗨 <b>on guard</b> - it's the default one. Althow is pretty useless when",
+			" you clash (if enemy is <i>defending</i> you also get <i>stunned</i>)",
+			", it allow you to see and get notified when the opponent change his",
+			" action so you can use that time to quickly set your counter-move\n",
+			"🛡 <b>defend</b> - it allow you to gain 1 stamina back and recive half ",
+			"of the damage when hit. When you clash against an enemy it allow you",
+			" to <i>stunn</i> it if it's <i>on guard</i> or if it's <i>dodging</i>",
+			" but you have more stamina\n",
+			"⚔ <b>attack</b> - you deal damage to the enemy if is not <i>defending</i> is 5\n",
+			"➰ <b>dodge</b> - it allow you to not recive any damage if the enemy ",
+			"is <i>attacking</i> but only if you are faster",
+			"\n\n⚠ <i>This bot is still on beta so things can change in future</i>",
+		)
 
 	default:
 		b.SendMessage("Wrong format", b.chatID, nil)
