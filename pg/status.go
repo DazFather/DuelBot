@@ -122,7 +122,7 @@ func (defending *Creature) defend(enemy Creature) (response InvokeRes) {
 }
 
 func (dodging *Creature) dodge(enemy Creature) (response InvokeRes) {
-	if dodging.duration > enemy.duration {
+	if dodging.stamina < enemy.stamina {
 		switch enemy.action {
 		case ATTACK:
 			dodging.hp -= int(enemy.damage)

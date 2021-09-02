@@ -307,7 +307,7 @@ func (b *bot) handleInviteUserID(update *echotron.Update, payload []string) {
 	b.SendMessage(text+"\nWhat are you going to do?", userID, &opt)
 }
 
-// Handle the accepting of a incoming match request
+// Handle the accepting of an incoming match request
 func (b *bot) handleAccept(msgID int, payload []string) {
 	var userID int64
 
@@ -337,7 +337,7 @@ func (b *bot) handleAccept(msgID int, payload []string) {
 	b.NotifyAcceptDuel(b.chatID, userID)
 }
 
-// Handle the rejecting of a incoming match request
+// Handle the rejecting of an incoming match request
 func (b *bot) handleReject(update *echotron.Update, payload []string) {
 	var (
 		messageID int
@@ -412,7 +412,7 @@ func (b *bot) handleAction(payload []string) {
 	}
 
 	// If action does not require any duration (already done) just quit
-	if duration == time.Duration(0) {
+	if duration == time.Duration(0) || payload[0] == "DEFEND" {
 		return
 	}
 
