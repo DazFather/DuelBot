@@ -261,19 +261,34 @@ func (b *bot) GetUserName(chatID int64) (name string) {
 
 // Try to edit a message if it can't or IDO == nil send a new one
 func (b *bot) DisplayMessage(text string, IDO *echotron.MessageIDOptions, linkPreview bool, kbd *echotron.InlineKeyboardMarkup) (res echotron.APIResponseMessage, err error) {
+	var (
+		editOpt echotron.MessageTextOptions
+		sendOpt echotron.MessageOptions
+	)
+
 	if IDO != nil {
-		res, err = b.EditMessageText(text, *IDO, &echotron.MessageTextOptions{
+		editOpt = echotron.MessageTextOptions{
 			ParseMode:             echotron.HTML,
 			DisableWebPagePreview: !linkPreview,
-			ReplyMarkup:           *kbd,
-		})
+		}
+
+		if kbd != nil {
+			editOpt.ReplyMarkup = *kbd
+		}
+
+		res, err = b.EditMessageText(text, *IDO, &editOpt)
 	}
 	if err != nil || res.Result == nil {
-		res, err = b.SendMessage(text, b.chatID, &echotron.MessageOptions{
+		sendOpt = echotron.MessageOptions{
 			ParseMode:             echotron.HTML,
 			DisableWebPagePreview: !linkPreview,
-			BaseOptions:           echotron.BaseOptions{ReplyMarkup: *kbd},
-		})
+		}
+
+		if kbd != nil {
+			sendOpt.BaseOptions = echotron.BaseOptions{ReplyMarkup: *kbd}
+		}
+
+		res, err = b.SendMessage(text, b.chatID, &sendOpt)
 	}
 	return
 }
