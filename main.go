@@ -448,6 +448,16 @@ func (b *bot) handleFlee() {
 	EndDuel(b.chatID)
 }
 
+// Handle the sending of the entire last battle history
+func (b *bot) handleBattleHistory() {
+	var history = GenPlayerHistory(b.chatID)
+
+	if history == "" {
+		history = "<i>There is nothing to see here</i>"
+	}
+	b.SendMessage(history, b.chatID, &echotron.MessageOptions{ParseMode: echotron.HTML})
+}
+
 // Manage the incoming inputs (uptate) from Telegram
 func (b *bot) Update(update *echotron.Update) {
 	var command, payload = extractCommand(update)
@@ -479,6 +489,9 @@ func (b *bot) Update(update *echotron.Update) {
 
 	case "/id":
 		b.SendMessage(fmt.Sprint(b.chatID), b.chatID, nil)
+
+	case "/history":
+		b.handleBattleHistory()
 
 	// Inside a duel
 	case "/action":

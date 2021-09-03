@@ -8,9 +8,10 @@ import (
 )
 
 type Player struct {
-	stats   pg.Creature
-	menuID  int
-	enemyID int64
+	stats    pg.Creature
+	menuID   int
+	reportID int
+	enemyID  int64
 }
 
 type BattleReport struct {
@@ -43,16 +44,15 @@ var (
 		pg.HELPLESS: "GUARD",
 	}
 
-	toStatus = reverseMap(toString)
-)
-
-func reverseMap(original map[pg.Status]string) (reversed map[string]pg.Status) {
-	reversed = make(map[string]pg.Status)
-	for key, val := range original {
-		reversed[val] = key
+	toStatus = map[string]pg.Status{
+		"GUARD":    pg.GUARD,
+		"ATTACK":   pg.ATTACK,
+		"DEFEND":   pg.DEFEND,
+		"DODGE":    pg.DODGE,
+		"STUNNED":  pg.STUNNED,
+		"EXAUSTED": pg.EXAUSTED,
 	}
-	return
-}
+)
 
 // It adds a player to the register
 func AddNewPlayer(ownerID, enemyID int64) {
@@ -64,9 +64,10 @@ func AddNewPlayer(ownerID, enemyID int64) {
 	)
 
 	players[ownerID] = &Player{
-		stats:   pg.NewCreature(defAttack, defStamina, defMaxStamina, defHealth),
-		menuID:  -1,
-		enemyID: enemyID,
+		stats:    pg.NewCreature(defAttack, defStamina, defMaxStamina, defHealth),
+		menuID:   -1,
+		reportID: -1,
+		enemyID:  enemyID,
 	}
 	return
 }
@@ -75,6 +76,15 @@ func AddNewPlayer(ownerID, enemyID int64) {
 func GetPlayerMenuID(ownerID int64) (menuID int, err error) {
 	if isPlayerExistent(ownerID) {
 		return players[ownerID].menuID, nil
+	}
+	err = errors.New("Player does not exist")
+	return
+}
+
+// Get the message ID of the last battle report
+func GetPlayerReportID(ownerID int64) (reportID int, err error) {
+	if isPlayerExistent(ownerID) {
+		return players[ownerID].reportID, nil
 	}
 	err = errors.New("Player does not exist")
 	return
@@ -170,6 +180,15 @@ func SetPlayerMenuID(ownerID int64, newMenuID int) (err error) {
 		return errors.New("Player does not exist or is not in a duel")
 	}
 	players[ownerID].menuID = newMenuID
+	return
+}
+
+// Set a new value for the message ID of the report in use
+func SetPlayerReportID(ownerID int64, newReportID int) (err error) {
+	if !IsPlayerBusy(ownerID) {
+		return errors.New("Player does not exist or is not in a duel")
+	}
+	players[ownerID].reportID = newReportID
 	return
 }
 

@@ -8,6 +8,19 @@ import (
 	"github.com/NicoNex/echotron/v3"
 )
 
+// TEMP: here will bw saved the battle history of a player
+var lastBattle = make(map[int64][]string, 0)
+
+// TEMP: generate the entire battle history ready to be displayed
+func GenPlayerHistory(ownerID int64) string {
+	return strings.Join(lastBattle[ownerID], "\n  ➖➖➖➖➖➖➖➖➖")
+}
+
+// TEMP: add a new report to the battle history of a player
+func addToPlayerHistory(ownerID int64, msgReport string) {
+	lastBattle[ownerID] = append(lastBattle[ownerID], msgReport)
+}
+
 // Make the actions (ME, ATTACK, GUARD ecc.. ) more pretty
 func Prettfy(rawAction string, conditional bool, emoji int8) (pretty string) {
 	var selectEmoji = map[string]string{
@@ -107,42 +120,45 @@ func (b *bot) SpyAction(toUserID, opponentID int64, move string) {
 
 // Notify the result of a perform
 func (b *bot) NotifyBattleReport(report BattleReport) {
-	var opt = echotron.MessageOptions{ParseMode: echotron.HTML}
-
-	for i, r := range report.PlayersInfo {
-		msg := ""
+	for i, current := range report.PlayersInfo {
 		enemy := report.PlayersInfo[1-i]
-
-		if r.GainEffect != nil {
-			msg = "<b>You got " + Prettfy(*r.GainEffect, false, 1) + "</b>"
-		}
-
-		msg += "\nYou %s" + Prettfy(r.Performed, false, 1) + "%s"
-		switch r.Performed {
-		case "HELPLESS", "STUNNED", "EXAUSTED":
-			msg = fmt.Sprintf(msg, "<b>were ", "</b>")
-		default:
-			if r.Success {
-				msg = fmt.Sprintf(msg, "<b>", " successfully</b>\nmeanwhile")
-			} else {
-				msg = fmt.Sprintf(msg, "<b>tried to ", "</b> but...")
-			}
-		}
-
-		msg += "\nEnemy <b>was " + Prettfy(enemy.Performed, true, 1) + "</b>"
-
-		if enemy.GainEffect != nil {
-			msg += "\n<b>Enemy got " + Prettfy(*enemy.GainEffect, false, 1) + "</b>"
-		}
-
-		msg += "\n\n" + GenOffsetInfoBar(r.LifeOff, r.StaminaOff, enemy.LifeOff)
-
-		b.SendMessage(msg, r.UserID, &opt)
-
+		DisplayReport(current, enemy)
 		if !report.EndDuel {
-			DisplayStatus(r.UserID, true)
+			DisplayStatus(current.UserID, false)
 		}
 	}
+}
+
+// Display the last battle report deleting the previous
+func DisplayReport(current, enemy PlayerReport) {
+	var text string
+
+	if current.GainEffect != nil {
+		text = "\n<b>You got " + Prettfy(*current.GainEffect, false, 1) + "</b>"
+	}
+
+	text += "\nYou %s" + Prettfy(current.Performed, false, 1) + "%s"
+	switch current.Performed {
+	case "HELPLESS", "STUNNED", "EXAUSTED":
+		text = fmt.Sprintf(text, "<b>were ", "</b>")
+	default:
+		if current.Success {
+			text = fmt.Sprintf(text, "<b>", " successfully</b>\nmeanwhile")
+		} else {
+			text = fmt.Sprintf(text, "<b>tried to ", "</b> but...")
+		}
+	}
+
+	text += "\nEnemy <b>was " + Prettfy(enemy.Performed, true, 1) + "</b>"
+
+	if enemy.GainEffect != nil {
+		text += "\n<b>Enemy got " + Prettfy(*enemy.GainEffect, false, 1) + "</b>"
+	}
+
+	text += "\n\n" + GenOffsetInfoBar(current.LifeOff, current.StaminaOff, enemy.LifeOff)
+
+	addToPlayerHistory(current.UserID, text)
+	UpdateReport(current.UserID, text)
 }
 
 // Display the current status of a user
@@ -199,10 +215,10 @@ func genActionKbd(move string) (markup echotron.InlineKeyboardMarkup) {
 func genRematchKbd(opponentID int64) (markup *echotron.MessageReplyMarkup) {
 	var kbd echotron.InlineKeyboardMarkup
 
-	kbd.InlineKeyboard = [][]echotron.InlineKeyboardButton{{{
-		Text:         "🔄 Rematch",
-		CallbackData: fmt.Sprint("/inviteid ", opponentID, " rematch"),
-	}}}
+	kbd.InlineKeyboard = [][]echotron.InlineKeyboardButton{{
+		{Text: "📜 Battle history", CallbackData: "/history"},
+		{Text: "🔄 Rematch", CallbackData: fmt.Sprint("/inviteid ", opponentID, " rematch")},
+	}}
 
 	return &echotron.MessageReplyMarkup{kbd}
 }
@@ -212,6 +228,7 @@ func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 	var IDs = [2]int64{firstID, secondID}
 
 	for i, currentID := range IDs {
+		delete(lastBattle, currentID)
 		user := GenUserLink(IDs[1-i], b.GetUserName(IDs[1-i]))
 		b.SendMessage(
 			fmt.Sprint("Duel against ", user, " is now starting 🏁"),
@@ -219,6 +236,7 @@ func (b *bot) NotifyAcceptDuel(firstID, secondID int64) {
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
 		DisplayStatus(currentID, true)
+		UpdateReport(currentID, "Enemy is approching...\n<i>Here will be displayed the report of the last clash. Now is still empty</i>")
 	}
 }
 
@@ -234,6 +252,7 @@ func (b *bot) NotifyDraw(player1ID, player2ID int64) {
 			&echotron.MessageOptions{ParseMode: echotron.HTML},
 		)
 		b.EditMessageReplyMarkup(echotron.NewMessageID(id, res.Result.ID), genRematchKbd(IDs[1-i]))
+		addToPlayerHistory(id, "⚖️ <b>The match is a draw</b>")
 	}
 }
 
@@ -252,6 +271,7 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 		"🥇 <b>You win</b> in the battle against ", GenUserLink(looserID, looserName), "\n",
 		"<i>Congratulation ", winnerName, " the big spirit of the war is proud of you</i>",
 	)
+	addToPlayerHistory(winnerID, "🥇 <b>You win</b>")
 	res, _ := b.SendMessage(text, winnerID, &opt)
 	b.EditMessageReplyMarkup(echotron.NewMessageID(winnerID, res.Result.ID), genRematchKbd(looserID))
 
@@ -259,6 +279,7 @@ func (b *bot) NotifyEndDuel(winnerID int64) {
 		"☠ <b>You loose</b> the battle against ", GenUserLink(winnerID, winnerName), "\n",
 		"<i>I hope that the guardian spirit can assist you in the next battle</i>",
 	)
+	addToPlayerHistory(looserID, "☠ <b>You loose</b>")
 	res, _ = b.SendMessage(text, looserID, &opt)
 	b.EditMessageReplyMarkup(echotron.NewMessageID(looserID, res.Result.ID), genRematchKbd(winnerID))
 }
@@ -278,10 +299,12 @@ func (b *bot) NotifyCancel() {
 		"<i>The big spirit of the war will not like this behaviour...</i>",
 	)
 	b.SendMessage(text, b.chatID, &opt)
+	delete(lastBattle, b.chatID)
 
 	text = fmt.Sprint(
 		"🏃 <b>Your ", GenUserLink(b.chatID, "opponent"), " has withdrawn</b>\n",
 		"<i>Probably you are too strong for him or maybe he doesn't like your face...</i>",
 	)
 	b.SendMessage(text, winnerID, &opt)
+	delete(lastBattle, winnerID)
 }

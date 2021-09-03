@@ -146,6 +146,39 @@ func extractName(update *echotron.Update) (FirstName string) {
 	return
 }
 
+// Update the reportID with the battle report of the player
+func UpdateReport(userID int64, text string) (err error) {
+	var (
+		reportID int
+		b        = echotron.NewAPI(TOKEN)
+		res      echotron.APIResponseMessage
+	)
+
+	reportID, err = GetPlayerReportID(userID)
+	if err != nil {
+		log.Println("UpdateReport", "GetPlayerReportID", err)
+		return
+	}
+
+	if r, e := b.DeleteMessage(userID, reportID); e != nil {
+		log.Println("UpdateReport", "DeleteMessage", e)
+		return e
+	} else if !r.Ok && reportID != -1 {
+		err = errors.New(r.Description)
+		log.Println("UpdateReport", "DeleteMessage", err)
+		return
+	}
+
+	res, err = b.SendMessage(text, userID, &echotron.MessageOptions{ParseMode: echotron.HTML})
+	if err != nil || res.Result == nil {
+		log.Println("UpdateReport", "SendMessage", err)
+		return
+	}
+	SetPlayerReportID(userID, res.Result.ID)
+
+	return
+}
+
 // Update the menuID with the status of the player
 func UpdateStatus(userID int64, text string, newMessage bool) (err error) {
 	var (
