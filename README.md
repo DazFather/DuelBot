@@ -20,6 +20,8 @@ You can now run the bot by typing
 Or save the token in a txt file and type on the shell:
 `<executable> --readfrom <filepath>`
 
-> "<executable>" is the name of the file that you obtain after you build the repo. Typically "DuelBot" or "DuelBot.exe"
-> "<token>" is the API Bot Token that BotFather generated for your bot
-> "<filepath>" is the path where you saved the txt file containing the token
+> `<executable>` is the name of the file that you obtain after you build the repo.
+>
+> `<token>` is the API Bot Token that BotFather generated for your bot.
+>
+> `<filepath>` is the path where you saved the txt file containing the token.
